@@ -1,0 +1,110 @@
+export type UserRole = 'admin' | 'tecnico'
+
+export interface Profile {
+  id: string
+  email: string
+  full_name: string
+  role: UserRole
+  created_at: string
+}
+
+export interface Client {
+  id: string
+  user_id: string
+  name: string
+  phone: string
+  age: number | null
+  frequency: 'nueva' | 'frecuente'
+  last_visit: string | null
+  responsible: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Quote {
+  id: string
+  user_id: string
+  client_id: string | null
+  client_name: string
+  client_phone: string | null
+  date: string
+  responsible: string | null
+  // Sistema
+  system_name: string | null
+  system_price: number
+  // Retoque
+  retoque_name: string | null
+  retoque_price: number
+  retoque_weeks_extra: number
+  // Uña actual
+  nail_number: number
+  nail_size_extra: number
+  kapping_extra: number
+  // Cambio tamaño y punta
+  size_change_label: string | null
+  size_change_price: number
+  tip_change_label: string | null
+  tip_change_price: number
+  // Preparación
+  prep_type: string | null
+  prep_price: number
+  nail_type: string | null
+  nail_layer: string | null
+  nail_condition: string | null
+  // Adicionales
+  additional_items: QuoteAdditional[]
+  // Diseños
+  design_items: QuoteDesign[]
+  // Pedrería
+  jewelry_items: QuoteJewelry[]
+  // Totales
+  subtotal: number
+  igv_rate: number
+  igv_amount: number
+  total_with_igv: number
+  // Metadatos
+  notes: string | null
+  client_type: 'nueva' | 'frecuente'
+  share_policies: boolean
+  status: 'borrador' | 'confirmada' | 'pagada'
+  created_at: string
+  updated_at: string
+}
+
+export interface QuoteAdditional {
+  id: string
+  name: string
+  quantity: number
+  unit_price: number
+  total: number
+  comment?: string | null
+}
+
+export interface QuoteDesign {
+  id: string
+  name: string
+  nails_count: number
+  unit_price: number
+  total: number
+  comment?: string | null
+}
+
+export interface QuoteJewelry {
+  id: string
+  name: string
+  quantity: number
+  unit_price: number
+  total: number
+  comment?: string | null
+}
+
+// Catálogo types
+export interface CatalogItem {
+  id: string
+  name: string
+  price: number
+  time?: string
+  price_per_nail?: number
+  category?: string
+}
