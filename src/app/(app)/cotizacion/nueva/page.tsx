@@ -383,7 +383,7 @@ function NuevaCotizacionForm() {
 
       {/* =========== STEP 1: Cliente =========== */}
       {step === 1 && (
-        <div className="glass-card fade-in" style={{ padding: '28px' }}>
+        <div className="glass-card fade-in step-card">
           <h2 style={sectionTitleStyle}>Datos de la clienta</h2>
           <div className="form-grid-2">
             <div>
@@ -428,10 +428,10 @@ function NuevaCotizacionForm() {
             <div style={{
               marginTop: '18px', padding: '13px 16px',
               background: 'rgba(245,169,75,0.08)', border: '1px solid rgba(245,169,75,0.3)',
-              borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px',
+              borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
             }}>
               <AlertTriangle size={17} strokeWidth={2} color="var(--vk-warning)" />
-              <span style={{ fontSize: '13px', color: 'var(--vk-warning)', flex: 1 }}>
+              <span style={{ fontSize: '13px', color: 'var(--vk-warning)', flex: '1 1 200px', minWidth: 0 }}>
                 Menor de 18 años — Compartir políticas de servicio obligatoriamente
               </span>
               <label style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', fontSize: '13px', color: 'var(--vk-warning)' }}>
@@ -450,7 +450,7 @@ function NuevaCotizacionForm() {
 
       {/* =========== STEP 2: Sistema =========== */}
       {step === 2 && (
-        <div className="glass-card fade-in" style={{ padding: '28px' }}>
+        <div className="glass-card fade-in step-card">
           <h2 style={sectionTitleStyle}>Sistema de uñas</h2>
           <div style={{ display: 'grid', gap: '18px' }}>
             <div>
@@ -466,7 +466,7 @@ function NuevaCotizacionForm() {
                 ))}
               </select>
               {systemData && (
-                <div style={{ marginTop: '8px', padding: '11px 14px', background: 'var(--vk-pink-muted)', border: '1px solid rgba(243,50,131,0.2)', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ marginTop: '8px', padding: '11px 14px', background: 'var(--vk-pink-muted)', border: '1px solid rgba(243,50,131,0.2)', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--vk-pink-soft)' }}>
                     Total: {formatSoles(systemData.price)}
                     {systemData.time && (
@@ -565,7 +565,7 @@ function NuevaCotizacionForm() {
 
       {/* =========== STEP 3: Preparación =========== */}
       {step === 3 && (
-        <div className="glass-card fade-in" style={{ padding: '28px' }}>
+        <div className="glass-card fade-in step-card">
           <h2 style={sectionTitleStyle}>Preparación de uña</h2>
           <div className="form-grid-2">
             <div>
@@ -619,7 +619,7 @@ function NuevaCotizacionForm() {
 
       {/* =========== STEP 4: Tamaño y Punta =========== */}
       {step === 4 && (
-        <div className="glass-card fade-in" style={{ padding: '28px' }}>
+        <div className="glass-card fade-in step-card">
           <h2 style={sectionTitleStyle}>Cambio de tamaño y punta</h2>
           <div className="form-grid-2">
             <div>
@@ -673,7 +673,7 @@ function NuevaCotizacionForm() {
       {/* =========== STEP 5: Diseños =========== */}
       {step === 5 && (
         <div className="fade-in">
-          <div className="glass-card" style={{ padding: '22px', marginBottom: '16px' }}>
+          <div className="glass-card step-card" style={{ marginBottom: '16px' }}>
             <h2 style={sectionTitleStyle}>Diseños</h2>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
               <input
@@ -701,7 +701,7 @@ function NuevaCotizacionForm() {
                 ))}
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px', maxHeight: '340px', overflowY: 'auto' }}>
+            <div className="scrollable-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
               {filteredDesigns.map(d => {
                 const inCart = designItems.find(x => x.id === d.id)
                 return (
@@ -729,14 +729,14 @@ function NuevaCotizacionForm() {
           </div>
 
           {designItems.length > 0 && (
-            <div className="glass-card" style={{ padding: '22px' }}>
+            <div className="glass-card step-card">
               <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '15px', fontWeight: 700, color: 'var(--vk-text)', marginBottom: '12px' }}>
                 Diseños seleccionados
               </h3>
               {designItems.map(d => (
                 <div key={d.id} style={{ padding: '11px 0', borderBottom: '1px solid var(--vk-border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '7px' }}>
-                    <span style={{ flex: 1, fontSize: '14px', color: 'var(--vk-text)' }}>{d.name}</span>
+                  <div className="line-item-row" style={{ marginBottom: '7px' }}>
+                    <span className="line-item-name" style={{ fontSize: '14px', color: 'var(--vk-text)' }}>{d.name}</span>
                     <span style={{ fontSize: '13px', color: 'var(--vk-text-muted)' }}>{formatSoles(d.unitPrice)} ×</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <button onClick={() => updateDesignNails(d.id, d.nails - 1)} style={{ width: '26px', height: '26px', borderRadius: '7px', border: '1px solid var(--vk-border)', background: 'var(--vk-surface)', color: 'var(--vk-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -768,23 +768,20 @@ function NuevaCotizacionForm() {
       {/* =========== STEP 6: Adicionales =========== */}
       {step === 6 && (
         <div className="fade-in form-grid-2" style={{ gap: '16px' }}>
-          <div className="glass-card" style={{ padding: '22px' }}>
+          <div className="glass-card step-card">
             <h2 style={{ ...sectionTitleStyle, fontSize: '18px', marginBottom: '16px' }}>Adicionales de servicio</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '440px', overflowY: 'auto' }}>
+            <div className="scrollable-list-lg" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {ADICIONALES.map(a => {
                 const selected = additionalItems.find(x => x.id === a.id)
                 return (
                   <div key={a.id} style={{ borderRadius: '10px', border: selected ? '1px solid rgba(243,50,131,0.25)' : '1px solid transparent', background: selected ? 'var(--vk-pink-muted)' : 'transparent', transition: 'all 0.15s' }}>
-                    <label style={{
-                      display: 'flex', alignItems: 'center', gap: '11px',
-                      padding: '10px 12px', cursor: 'pointer',
-                    }}>
+                    <label className="line-item-row" style={{ padding: '10px 12px', cursor: 'pointer' }}>
                       <input
                         type="checkbox" checked={!!selected}
                         onChange={() => toggleAdditional(a)}
                         style={{ accentColor: 'var(--vk-pink)', cursor: 'pointer' }}
                       />
-                      <span style={{ flex: 1, fontSize: '13px', color: 'var(--vk-text)' }}>{a.name}</span>
+                      <span className="line-item-name" style={{ fontSize: '13px', color: 'var(--vk-text)' }}>{a.name}</span>
                       {a.time && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--vk-text-subtle)' }}>
                           <Clock size={11} strokeWidth={2} />
@@ -810,17 +807,17 @@ function NuevaCotizacionForm() {
               })}
             </div>
           </div>
-          <div className="glass-card" style={{ padding: '22px' }}>
+          <div className="glass-card step-card">
             <h2 style={{ ...sectionTitleStyle, fontSize: '18px', marginBottom: '16px' }}>Pedrería</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '440px', overflowY: 'auto' }}>
+            <div className="scrollable-list-lg" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {[...new Set(PEDRERIA.map(p => p.category))].map(cat => (
                 <div key={cat}>
                   <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--vk-pink-soft)', textTransform: 'uppercase', letterSpacing: '0.12em', padding: '10px 4px 5px' }}>{cat}</div>
                   {PEDRERIA.filter(p => p.category === cat).map(j => {
                     const item = jewelryItems.find(x => x.id === j.id)
                     return (
-                      <div key={j.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '10px', background: item ? 'var(--vk-pink-muted)' : 'transparent', border: item ? '1px solid rgba(243,50,131,0.25)' : '1px solid transparent', transition: 'all 0.15s' }}>
-                        <span style={{ flex: 1, fontSize: '13px', color: 'var(--vk-text)' }}>{j.name}</span>
+                      <div key={j.id} className="line-item-row" style={{ padding: '8px 12px', borderRadius: '10px', background: item ? 'var(--vk-pink-muted)' : 'transparent', border: item ? '1px solid rgba(243,50,131,0.25)' : '1px solid transparent', transition: 'all 0.15s' }}>
+                        <span className="line-item-name" style={{ fontSize: '13px', color: 'var(--vk-text)' }}>{j.name}</span>
                         <span style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>{formatSoles(j.price)}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <button onClick={() => item && updateJewelryQty(j.id, item.qty - 1)} style={{ width: '22px', height: '22px', borderRadius: '6px', border: '1px solid var(--vk-border)', background: 'var(--vk-surface)', color: 'var(--vk-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -844,7 +841,7 @@ function NuevaCotizacionForm() {
       {/* =========== STEP 7: Resumen =========== */}
       {step === 7 && (
         <div className="fade-in">
-          <div className="glass-card" style={{ padding: '28px', marginBottom: '16px' }}>
+          <div className="glass-card step-card" style={{ marginBottom: '16px' }}>
             <h2 style={sectionTitleStyle}>Resumen de cotización</h2>
 
             {/* Client info row */}
@@ -1101,7 +1098,7 @@ function NuevaCotizacionForm() {
       )}
 
       {/* Navigation */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px', paddingBottom: '30px', gap: '12px', flexWrap: 'wrap' }}>
         <button
           className="btn-ghost"
           onClick={() => setStep(s => Math.max(1, s - 1))}

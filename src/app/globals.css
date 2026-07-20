@@ -231,6 +231,12 @@ textarea:focus {
   box-shadow: 0 0 0 3px var(--vk-pink-muted);
 }
 
+@media (max-width: 860px) {
+  input, select, textarea, .vk-input {
+    font-size: 16px !important;
+  }
+}
+
 /* Botón primario */
 .btn-primary {
   display: inline-flex;
@@ -540,18 +546,29 @@ textarea:focus {
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.mobile-menu-btn {
+.mobile-top-bar {
   display: none;
+}
+.mobile-only {
+  display: none !important;
 }
 
 .mobile-overlay {
   display: none;
 }
 
+/* .main-content es flex:1 dentro de un contenedor flex; sin min-width:0 el
+   navegador lo agranda para caber el contenido más ancho de sus descendientes
+   (p.ej. filas con overflow-x:auto o min-width en px), y como body tiene
+   overflow-x:hidden ese exceso queda recortado e invisible en mobile. */
+.main-content {
+  min-width: 0;
+}
+
 @media (max-width: 860px) {
   .main-content {
     margin-left: 0 !important;
-    padding: 72px 16px 24px !important;
+    padding: 92px 16px 120px !important;
   }
 
   .sidebar-container {
@@ -562,26 +579,43 @@ textarea:focus {
     transform: translateX(0);
   }
 
-  .mobile-menu-btn {
+  .mobile-only {
+    display: flex !important;
+  }
+
+  .mobile-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    z-index: 90;
+    padding: 0 16px;
+  }
+
+  .mobile-hamburger-btn {
+    background: transparent;
+    border: none;
+    color: var(--vk-text);
+    padding: 8px;
+    margin-left: -8px;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    position: fixed;
-    top: 16px;
-    left: 16px;
-    z-index: 101;
-    background: var(--vk-surface);
-    border: 1px solid var(--vk-border);
-    padding: 10px;
-    border-radius: 12px;
-    color: var(--vk-text);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    cursor: pointer;
+    border-radius: 8px;
     transition: background 0.2s;
   }
-
-  .mobile-menu-btn:hover {
-    background: var(--vk-surface-2);
+  
+  .mobile-hamburger-btn:active {
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .mobile-overlay.open {
@@ -709,8 +743,51 @@ textarea:focus {
 /* Reserva espacio para el precio flotante que se vuelve barra inferior en mobile */
 @media (max-width: 900px) {
   .cotizacion-form-page {
-    padding-bottom: 88px;
+    padding-bottom: 96px;
   }
+}
+
+/* Tarjetas de cada paso del formulario de cotización */
+.step-card {
+  padding: 28px;
+}
+@media (max-width: 640px) {
+  .step-card {
+    padding: 16px;
+  }
+}
+
+/* Listas con scroll interno (diseños, adicionales, pedrería) —
+   en mobile se deja que fluyan con la página en vez de un scroll anidado,
+   que es difícil de usar con el dedo y hace parecer que faltan campos. */
+.scrollable-list {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.scrollable-list-lg {
+  max-height: 440px;
+  overflow-y: auto;
+}
+@media (max-width: 640px) {
+  .scrollable-list,
+  .scrollable-list-lg {
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+/* Filas con texto + controles a la derecha: si no caben, deben bajar de línea
+   en vez de desbordar horizontalmente (el body tiene overflow-x:hidden, así
+   que el contenido desbordado quedaba invisible en mobile). */
+.line-item-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.line-item-row > .line-item-name {
+  flex: 1 1 140px;
+  min-width: 0;
 }
 
 /* Contenedor exportable de la cotización — más compacto en mobile */
@@ -823,5 +900,10 @@ textarea:focus {
 @media (prefers-reduced-motion: reduce) {
   .skeleton::after {
     animation: none;
+  }
+}
+@media (max-width: 860px) {
+  .desktop-only {
+    display: none !important;
   }
 }

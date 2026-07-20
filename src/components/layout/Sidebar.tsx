@@ -259,14 +259,19 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
 
   return (
     <>
-      <button
-        className="mobile-menu-btn"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label={isOpen ? 'Cerrar menú' : 'Abrir menú'}
-        aria-expanded={isOpen}
-      >
-        {isOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
+      {/* Top App Bar (Solo Mobile) */}
+      <div className="mobile-top-bar">
+        <button
+          className="mobile-hamburger-btn"
+          onClick={() => setIsOpen(true)}
+          aria-label="Abrir menú"
+        >
+          <Menu size={24} />
+        </button>
+        <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--vk-text)' }}>VK STUDIO</span>
+        <div style={{ width: '40px' }} /> {/* Spacer */}
+      </div>
+
       <div className={`mobile-overlay ${isOpen ? 'open' : ''}`} onClick={() => setIsOpen(false)} aria-hidden="true" />
 
       <aside className={`sidebar-container ${isOpen ? 'open' : ''}`} style={{
@@ -298,6 +303,7 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
             </Link>
           )}
           <button
+            className="desktop-only"
             onClick={() => setIsDesktopCollapsed(!isDesktopCollapsed)}
             style={{
               background: 'transparent', border: 'none', color: 'var(--vk-text-muted)',
@@ -315,6 +321,27 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
             title={isDesktopCollapsed ? "Expandir menú" : "Colapsar menú"}
           >
             {isDesktopCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+          
+          <button
+            className="mobile-only"
+            onClick={() => setIsOpen(false)}
+            aria-label="Cerrar menú"
+            style={{
+              background: 'transparent', border: 'none', color: 'var(--vk-text-muted)',
+              cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: '6px', transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = 'var(--vk-text)'
+              e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = 'var(--vk-text-muted)'
+              e.currentTarget.style.background = 'transparent'
+            }}
+          >
+            <X size={20} />
           </button>
         </div>
 
@@ -376,32 +403,35 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
           {/* Terminal Dashboard Widget */}
           {!isDesktopCollapsed && metrics && (
             <div style={{
-              margin: '16px 12px 0',
-              padding: '16px 16px',
+              margin: '12px 12px 0',
+              padding: '12px 12px',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              fontSize: '11px',
+              fontSize: '10px',
               color: '#888',
               display: 'flex',
               flexDirection: 'column',
-              gap: '16px'
+              gap: '12px',
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.03)'
             }}>
               {/* Sección Actividad */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ letterSpacing: '0.2em', color: '#555' }}>ACTIVIDAD</span>
+                  <span style={{ letterSpacing: '0.15em', color: '#555' }}>ACTIVIDAD</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#00ffcc' }}>
-                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#00ffcc', boxShadow: '0 0 4px #00ffcc' }} />
-                    <span>Live</span>
+                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#00ffcc', boxShadow: '0 0 4px #00ffcc' }} />
+                    <span style={{ fontSize: '9px' }}>Live</span>
                   </div>
                 </div>
-                
-                <div style={{ width: '100%', height: '45px', position: 'relative', marginTop: '4px' }}>
+
+                <div style={{ width: '100%', height: '35px', position: 'relative', marginTop: '2px' }}>
                   {(() => {
                     const data = metrics.dailyData;
                     const max = Math.max(...data, 1);
-                    
+
                     const width = 200;
-                    const height = 45;
+                    const height = 35;
                     const points = data.map((val, i) => {
                       const x = (i / (data.length - 1)) * width;
                       const y = height - ((val / max) * height * 0.85);
@@ -419,14 +449,14 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
                           </linearGradient>
                         </defs>
                         <path d={fillPath} fill="url(#chartGradient)" />
-                        <path d={linePath} fill="none" stroke="var(--vk-pink)" strokeWidth="1.5" style={{ filter: 'drop-shadow(0 2px 4px rgba(243,50,131,0.3))' }} />
-                        <circle cx={width} cy={height - ((data[data.length-1] / max) * height * 0.85)} r="2" fill="var(--vk-pink)" />
+                        <path d={linePath} fill="none" stroke="var(--vk-pink)" strokeWidth="1.2" style={{ filter: 'drop-shadow(0 2px 4px rgba(243,50,131,0.3))' }} />
+                        <circle cx={width} cy={height - ((data[data.length - 1] / max) * height * 0.85)} r="1.5" fill="var(--vk-pink)" />
                       </svg>
                     )
                   })()}
                 </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', marginTop: '4px' }}>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', marginTop: '2px' }}>
                   <span>Últimos 7d</span>
                   <span style={{ color: 'var(--vk-pink)' }}>↑ S/ {metrics.totalMes}</span>
                 </div>
@@ -435,28 +465,28 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
               <div style={{ width: '100%', height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
 
               {/* Sección Resumen */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <span style={{ letterSpacing: '0.2em', color: '#555', marginBottom: '4px' }}>RESUMEN</span>
-                
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ letterSpacing: '0.15em', color: '#555', marginBottom: '2px' }}>RESUMEN</span>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#5c5c5c' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#5c5c5c' }} />
                     <span>Canceladas</span>
                   </div>
                   <span style={{ color: '#888' }}>0</span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'var(--vk-pink)' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--vk-pink)' }} />
                     <span>En proceso</span>
                   </div>
                   <span style={{ color: 'var(--vk-pink)' }}>0</span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#00ffcc' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#00ffcc' }} />
                     <span>Aprobadas</span>
                   </div>
                   <span style={{ color: '#00ffcc' }}>0</span>
@@ -476,7 +506,8 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
               padding: '30px 0 20px',
               pointerEvents: 'none',
               userSelect: 'none',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              flexShrink: 0
             }}>
               <div style={{
                 position: 'relative',
@@ -492,20 +523,20 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
                   opacity: 0.15,
                   mixBlendMode: 'screen',
                 }} />
-                <Image 
-                  src="/logoblanco2D.png" 
-                  alt="VK Studio Watermark" 
-                  width={300} 
-                  height={112} 
-                  style={{ 
-                    width: '140px', 
-                    height: 'auto', 
+                <Image
+                  src="/logoblanco2D.png"
+                  alt="VK Studio Watermark"
+                  width={300}
+                  height={112}
+                  style={{
+                    width: '140px',
+                    height: 'auto',
                     opacity: 0.06,
                     transform: 'rotate(-4deg)',
                     filter: 'contrast(120%) brightness(150%)',
                     position: 'relative',
                     zIndex: 1
-                  }} 
+                  }}
                 />
               </div>
             </div>

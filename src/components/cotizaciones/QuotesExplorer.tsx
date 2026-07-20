@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { formatSoles } from '@/lib/data/calcular'
 import { avatarGradient } from '@/lib/avatar'
+import { createClient } from '@/lib/supabase/client'
 import Pagination from '@/components/ui/Pagination'
-import { FileText, Search, ArrowUpRight, Wallet, CircleCheck, Receipt, SearchX } from 'lucide-react'
+import { FileText, Search, ArrowUpRight, Wallet, CircleCheck, Receipt, SearchX, Trash2, Loader2 } from 'lucide-react'
 
 export interface QuoteRow {
   id: string
@@ -45,8 +46,23 @@ export default function QuotesExplorer({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const supabase = createClient()
   const [searchInput, setSearchInput] = useState(search)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const isFirst = useRef(true)
+
+  async function deleteDraft(id: string, clientName: string) {
+    const confirmed = window.confirm(`¿Eliminar el borrador de ${clientName || 'esta clienta'}? Esta acción no se puede deshacer.`)
+    if (!confirmed) return
+    setDeletingId(id)
+    const { error } = await supabase.from('quotes').delete().eq('id', id)
+    setDeletingId(null)
+    if (error) {
+      alert('No se pudo eliminar la cotización')
+      return
+    }
+    router.refresh()
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -56,7 +72,7 @@ export default function QuotesExplorer({
       if (value === null || value === '') params.delete(key)
       else params.set(key, value)
     }
-    router.push(`${pathname}?${params.toString()}`)
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   // Debounce de búsqueda → sincroniza a la URL
@@ -197,14 +213,36 @@ export default function QuotesExplorer({
                       {new Date(q.date).toLocaleDateString('es-PE')}
                     </td>
                     <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                      <Link href={`/cotizacion/${q.id}`} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '4px',
-                        fontSize: '13px', color: 'var(--vk-pink-soft)',
-                        textDecoration: 'none', fontWeight: 500,
-                      }}>
-                        Ver detalle
-                        <ArrowUpRight size={14} strokeWidth={2} />
-                      </Link>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px' }}>
+                        {q.status === 'borrador' && (
+                          <button
+                            onClick={() => deleteDraft(q.id, q.client_name)}
+                            disabled={deletingId === q.id}
+                            title="Eliminar borrador"
+                            aria-label="Eliminar borrador"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              background: 'transparent', border: 'none', cursor: 'pointer',
+                              color: 'var(--vk-error)', padding: '2px', opacity: deletingId === q.id ? 0.5 : 0.7,
+                              transition: 'opacity 0.15s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={e => e.currentTarget.style.opacity = deletingId === q.id ? '0.5' : '0.7'}
+                          >
+                            {deletingId === q.id
+                              ? <Loader2 size={15} strokeWidth={2} style={{ animation: 'spin 0.8s linear infinite' }} />
+                              : <Trash2 size={15} strokeWidth={1.8} />}
+                          </button>
+                        )}
+                        <Link href={`/cotizacion/${q.id}`} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          fontSize: '13px', color: 'var(--vk-pink-soft)',
+                          textDecoration: 'none', fontWeight: 500,
+                        }}>
+                          Ver detalle
+                          <ArrowUpRight size={14} strokeWidth={2} />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

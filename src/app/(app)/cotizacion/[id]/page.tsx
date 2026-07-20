@@ -2,19 +2,22 @@
 
 import { useRef, useState, useEffect, use } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatSoles } from '@/lib/data/calcular'
 import type { Quote } from '@/lib/types'
-import { ArrowLeft, CircleCheck, FileDown, Loader2, Phone, BadgeCheck, Pencil } from 'lucide-react'
+import { ArrowLeft, CircleCheck, FileDown, Loader2, Phone, BadgeCheck, Pencil, Trash2 } from 'lucide-react'
 import VkLogo from '@/components/layout/VkLogo'
 
 export default function CotizacionDetalle({ params }: { params: Promise<{ id: string }> }) {
   const supabase = createClient()
+  const router = useRouter()
   const { id } = use(params)
 
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -30,6 +33,20 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
     if (!error) {
       setQuote({ ...quote, status: newStatus })
     }
+  }
+
+  async function deleteQuote() {
+    if (!quote) return
+    const confirmed = window.confirm(`¿Eliminar el borrador de ${quote.client_name || 'esta clienta'}? Esta acción no se puede deshacer.`)
+    if (!confirmed) return
+    setDeleting(true)
+    const { error } = await supabase.from('quotes').delete().eq('id', quote.id)
+    if (error) {
+      alert('No se pudo eliminar la cotización')
+      setDeleting(false)
+      return
+    }
+    router.push('/cotizaciones')
   }
 
   async function exportPDF() {
@@ -86,6 +103,12 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
             <button className="btn-ghost" onClick={() => updateStatus('confirmada')} style={{ color: 'var(--vk-pink-soft)', borderColor: 'var(--vk-pink-glow)' }}>
               <BadgeCheck size={16} strokeWidth={1.8} />
               Confirmar cotización
+            </button>
+          )}
+          {quote.status === 'borrador' && (
+            <button className="btn-ghost" onClick={deleteQuote} disabled={deleting} style={{ color: 'var(--vk-error)', borderColor: 'rgba(239,68,68,0.3)' }}>
+              {deleting ? <Loader2 size={16} strokeWidth={2} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Trash2 size={16} strokeWidth={1.8} />}
+              {deleting ? 'Eliminando...' : 'Eliminar borrador'}
             </button>
           )}
           {quote.status === 'confirmada' && (

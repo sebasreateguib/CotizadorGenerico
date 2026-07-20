@@ -65,7 +65,7 @@ export default function AdminOverview({
       if (value === null || value === '') params.delete(key)
       else params.set(key, value)
     }
-    router.push(`${pathname}?${params.toString()}`)
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   useEffect(() => {
