@@ -686,20 +686,70 @@ textarea:focus {
   }
 }
 
-/* Precio flotante del formulario de cotización */
+/* Precio flotante del formulario de cotización.
+   Usa "sticky" (no "fixed") para que reserve su propio espacio en el flujo
+   del documento: así, al hacer scroll, nunca queda encima del texto de los
+   pasos siguientes (con "fixed" se sacaba del flujo y quedaba pisando
+   secciones que subían por debajo). */
 .price-float {
-  position: fixed;
+  position: sticky;
   top: 24px;
-  right: 36px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 12px;
   background: linear-gradient(160deg, var(--vk-surface-2), var(--vk-surface));
   border: 1px solid rgba(243, 50, 131, 0.25);
   border-radius: 14px;
   padding: 12px 18px;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   z-index: 50;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 24px rgba(243, 50, 131, 0.08);
+}
+.price-float-breakdown {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+.price-float-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  max-width: 100%;
+}
+.price-float-line-label {
+  font-size: 11px;
+  color: var(--vk-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.price-float-line-amount {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vk-text);
+  white-space: nowrap;
+}
+.price-float-empty {
+  font-size: 12px;
+  color: var(--vk-text-subtle);
+}
+.price-float-totals {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 .price-float-main {
   display: flex;
@@ -708,16 +758,25 @@ textarea:focus {
 }
 @media (max-width: 900px) {
   .price-float {
+    position: fixed;
     top: auto;
     bottom: 16px;
     left: 16px;
     right: 16px;
+    width: auto;
+    margin-left: 0;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     border-radius: 16px;
   }
+  .price-float-breakdown {
+    display: none;
+  }
   .price-float-main {
+    align-items: flex-start;
+  }
+  .price-float-totals {
     align-items: flex-start;
   }
 }
@@ -743,7 +802,7 @@ textarea:focus {
 /* Reserva espacio para el precio flotante que se vuelve barra inferior en mobile */
 @media (max-width: 900px) {
   .cotizacion-form-page {
-    padding-bottom: 96px;
+    padding-bottom: 110px;
   }
 }
 

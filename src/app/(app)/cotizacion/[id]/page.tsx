@@ -18,6 +18,7 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -27,11 +28,21 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
     })
   }, [id])
 
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      setIsAdmin(profile?.role === 'admin')
+    })
+  }, [])
+
   async function updateStatus(newStatus: 'borrador' | 'confirmada' | 'pagada') {
     if (!quote) return
     const { error } = await supabase.from('quotes').update({ status: newStatus }).eq('id', quote.id)
     if (!error) {
       setQuote({ ...quote, status: newStatus })
+    } else {
+      alert('No se pudo actualizar el estado: ' + error.message)
     }
   }
 
@@ -111,11 +122,16 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
               {deleting ? 'Eliminando...' : 'Eliminar borrador'}
             </button>
           )}
-          {quote.status === 'confirmada' && (
+          {quote.status === 'confirmada' && isAdmin && (
             <button className="btn-ghost" onClick={() => updateStatus('pagada')} style={{ color: 'var(--vk-success)', borderColor: 'rgba(62,207,142,0.3)' }}>
               <CircleCheck size={16} strokeWidth={1.8} />
               Marcar como pagada
             </button>
+          )}
+          {quote.status === 'confirmada' && !isAdmin && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--vk-text-subtle)', padding: '0 4px' }}>
+              Solo un Admin puede confirmar el pago
+            </span>
           )}
           <button className="btn-primary" onClick={exportPDF} disabled={exporting}>
             {exporting ? <Loader2 size={16} strokeWidth={2} style={{ animation: 'spin 0.8s linear infinite' }} /> : <FileDown size={16} strokeWidth={1.8} />}
@@ -178,10 +194,35 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
             <div>
               <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--vk-text-subtle)', fontWeight: 600, letterSpacing: '0.1em', marginBottom: '8px' }}>Detalles técnicos</div>
               <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)', marginBottom: '4px' }}>Responsable: {quote.responsible || 'No asignada'}</div>
-              {quote.nail_condition && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)', marginBottom: '4px' }}>Condición: {quote.nail_condition}</div>}
-              {quote.nail_layer && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Capa: {quote.nail_layer}</div>}
+              {quote.nail_curvature && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)', marginBottom: '4px' }}>Tipo de uña: {quote.nail_curvature}</div>}
+              {quote.nail_plate_status && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)', marginBottom: '4px' }}>Estado de la lámina: {quote.nail_plate_status}</div>}
+              {quote.product_condition && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)', marginBottom: '4px' }}>Estado del producto: {quote.product_condition}</div>}
+              {quote.next_maintenance_date && (
+                <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Próximo mantenimiento: {new Date(quote.next_maintenance_date).toLocaleDateString('es-PE')}</div>
+              )}
             </div>
           </div>
+
+          {/* Ficha de diagnóstico y servicio técnico */}
+          {(quote.skin_type || quote.nail_moisture || quote.previous_product || quote.service_type || quote.nail_system_material || quote.technique_type || quote.primer_type || quote.base_type || quote.nail_shape || quote.nail_length) && (
+            <div style={{ marginBottom: '40px' }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--vk-text-subtle)', fontWeight: 600, letterSpacing: '0.1em', marginBottom: '16px', borderBottom: '1px solid var(--vk-border)', paddingBottom: '8px' }}>
+                Ficha técnica
+              </div>
+              <div className="form-grid-2" style={{ gap: '10px 24px' }}>
+                {quote.skin_type && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Tipo de piel: <span style={{ color: 'var(--vk-text)' }}>{quote.skin_type}</span></div>}
+                {quote.nail_moisture && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Humedad de la uña: <span style={{ color: 'var(--vk-text)' }}>{quote.nail_moisture}</span></div>}
+                {quote.previous_product && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Producto previo: <span style={{ color: 'var(--vk-text)' }}>{quote.previous_product}</span></div>}
+                {quote.service_type && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Servicio realizado: <span style={{ color: 'var(--vk-text)' }}>{quote.service_type}</span></div>}
+                {quote.nail_system_material && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Sistema seleccionado: <span style={{ color: 'var(--vk-text)' }}>{quote.nail_system_material}</span></div>}
+                {quote.technique_type && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Técnica seleccionada: <span style={{ color: 'var(--vk-text)' }}>{quote.technique_type}</span></div>}
+                {quote.primer_type && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Primer: <span style={{ color: 'var(--vk-text)' }}>{quote.primer_type}</span></div>}
+                {quote.base_type && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Base: <span style={{ color: 'var(--vk-text)' }}>{quote.base_type}</span></div>}
+                {quote.nail_shape && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Forma: <span style={{ color: 'var(--vk-text)' }}>{quote.nail_shape}</span></div>}
+                {quote.nail_length && <div style={{ fontSize: '14px', color: 'var(--vk-text-muted)' }}>Largo: <span style={{ color: 'var(--vk-text)' }}>{quote.nail_length}</span></div>}
+              </div>
+            </div>
+          )}
 
           {/* Lines */}
           <div style={{ marginBottom: '40px' }}>
@@ -296,6 +337,11 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Footer Notes */}
+          {quote.technical_notes && (
+            <div style={{ padding: '16px', background: 'rgba(0,0,0,0.25)', borderRadius: '10px', fontSize: '13px', color: 'var(--vk-text-muted)', marginBottom: quote.notes ? '12px' : 0 }}>
+              <strong style={{ color: 'var(--vk-text)' }}>Observaciones técnicas:</strong> {quote.technical_notes}
+            </div>
+          )}
           {quote.notes && (
             <div style={{ padding: '16px', background: 'rgba(0,0,0,0.25)', borderRadius: '10px', fontSize: '13px', color: 'var(--vk-text-muted)' }}>
               <strong style={{ color: 'var(--vk-text)' }}>Notas:</strong> {quote.notes}

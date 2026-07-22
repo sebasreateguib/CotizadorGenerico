@@ -38,11 +38,10 @@ export const CAMBIO_TAMANIO = [
 export const CAMBIO_PUNTA = [
   { id: 'sin-cambio', label: 'Sin Cambio de punta', price: 0 },
   { id: 'cuadrada-almendra', label: 'Cuadrada a Almendra', price: 15 },
-  { id: 'koffin-almendra', label: 'Koffin a Almendra', price: 15 },
-  { id: 'stiletto-almendra', label: 'Stiletto a Almendra', price: 15 },
+  { id: 'koffin-almendra', label: 'Koffin a Almendra', price: 10 },
+  { id: 'stiletto-almendra', label: 'Stiletto a Almendra', price: 10 },
   { id: 'stiletto-koffin', label: 'Stiletto a Koffin', price: 15 },
-  { id: 'stiletto-almendra-2', label: 'Stilleto a Almendra', price: 15 },
-  { id: 'koffin-cuadrada', label: 'Koffin a cuadrada', price: 15 },
+  { id: 'koffin-cuadrada', label: 'Koffin a cuadrada', price: 10 },
   { id: 'almendra-koffin', label: 'Almendra a Koffin', price: 15 },
 ]
 
@@ -95,10 +94,6 @@ export const PREP_TIPOS = [
   { id: 'drastica', label: 'Drástica', price: 15 },
   { id: 'basico', label: 'Básico', price: 10 },
 ]
-
-export const PREP_TIPO_UNA = ['Estándar', 'Convexa', 'Cóncava']
-export const PREP_CAPA = ['NO LIPÍDICA', 'LIPÍDICA']
-export const PREP_CONDICION = ['Normal', 'Onicofagia', 'Delgadas']
 
 // Kapping size extras
 export const KAPPING_EXTRA = [

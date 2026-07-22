@@ -1,31 +1,44 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { SISTEMAS, RETOQUES, RETOQUE_SEMANAS } from '@/lib/data/sistemas'
 import {
   ADICIONALES, CAMBIO_TAMANIO, CAMBIO_PUNTA,
-  PEDRERIA, PREP_TIPOS,
-  PREP_TIPO_UNA, PREP_CAPA, PREP_CONDICION, KAPPING_EXTRA
+  PEDRERIA, KAPPING_EXTRA
 } from '@/lib/data/adicionales'
 import { DISENOS, DISENO_CATEGORIES } from '@/lib/data/disenos'
 import { calculateQuote, formatSoles, getNailSizeExtra } from '@/lib/data/calcular'
 import {
-  User, Layers, Wand2, Ruler, Palette, Gem, ClipboardList,
+  User, Layers, Ruler, Palette, Gem, ClipboardList,
   AlertTriangle, Info, Clock, Minus, Plus, ChevronLeft, ChevronRight,
-  Save, Sparkles, Loader2,
+  Save, Sparkles, Loader2, Stethoscope,
 } from 'lucide-react'
+import {
+  TIPO_UNA, ESTADO_LAMINA, TIPO_PIEL, HUMEDAD_UNA, PRODUCTO_PREVIO, ESTADO_PRODUCTO,
+} from '@/lib/data/diagnostico'
 
 const STEPS = [
   { id: 1, label: 'Cliente', Icon: User },
   { id: 2, label: 'Sistema', Icon: Layers },
-  { id: 3, label: 'Preparación', Icon: Wand2 },
-  { id: 4, label: 'Tamaño', Icon: Ruler },
-  { id: 5, label: 'Diseños', Icon: Palette },
-  { id: 6, label: 'Adicionales', Icon: Gem },
-  { id: 7, label: 'Resumen', Icon: ClipboardList },
-]
+  { id: 3, label: 'Diagnóstico', Icon: Stethoscope },
+  { id: 5, label: 'Tamaño', Icon: Ruler },
+  { id: 6, label: 'Diseños', Icon: Palette },
+  { id: 7, label: 'Adicionales', Icon: Gem },
+  { id: 8, label: 'Resumen', Icon: ClipboardList },
+] as const
+
+const HIDDEN_STEPS = new Set([4])
+const MAX_STEP = 8
+
+function adjacentStep(current: number, direction: 1 | -1): number {
+  let next = current + direction
+  while (next >= 1 && next <= MAX_STEP && HIDDEN_STEPS.has(next)) {
+    next += direction
+  }
+  return Math.max(1, Math.min(MAX_STEP, next))
+}
 
 interface DesignItem { id: string; name: string; nails: number; unitPrice: number; comment: string }
 interface JewelryItem { id: string; name: string; qty: number; unitPrice: number }
@@ -57,6 +70,7 @@ function NuevaCotizacionForm() {
   const [responsible, setResponsible] = useState('')
   const [sharePolicies, setSharePolicies] = useState(false)
   const [quoteDate, setQuoteDate] = useState(new Date().toISOString().split('T')[0])
+  const [nextMaintenance, setNextMaintenance] = useState('')
 
   // Step 2: Sistema
   const [selectedSystem, setSelectedSystem] = useState('')
@@ -67,26 +81,38 @@ function NuevaCotizacionForm() {
   const [igvRate, setIgvRate] = useState(0.18)
   const [systemComment, setSystemComment] = useState('')
 
-  // Step 3: Prep
-  const [prepType, setPrepType] = useState('estandar')
-  const [nailType, setNailType] = useState('')
-  const [nailLayer, setNailLayer] = useState('')
-  const [nailCondition, setNailCondition] = useState('')
+  // Step 3: Diagnóstico
+  const [nailCurvature, setNailCurvature] = useState('')
+  const [nailPlateStatus, setNailPlateStatus] = useState('')
+  const [skinType, setSkinType] = useState('')
+  const [nailMoisture, setNailMoisture] = useState('')
+  const [previousProduct, setPreviousProduct] = useState('')
+  const [productCondition, setProductCondition] = useState('')
 
-  // Step 4: Size/Tip
+  // Step 4: Servicio técnico
+  const [primerType, setPrimerType] = useState('')
+  const [baseType, setBaseType] = useState('')
+  const [serviceType, setServiceType] = useState('')
+  const [systemMaterial, setSystemMaterial] = useState('')
+  const [techniqueType, setTechniqueType] = useState('')
+  const [nailShape, setNailShape] = useState('')
+  const [nailLength, setNailLength] = useState('')
+  const [technicalNotes, setTechnicalNotes] = useState('')
+
+  // Step 5: Size/Tip
   const [sizeChange, setSizeChange] = useState(CAMBIO_TAMANIO[0].id)
   const [tipChange, setTipChange] = useState(CAMBIO_PUNTA[0].id)
 
-  // Step 5: Designs
+  // Step 6: Designs
   const [designItems, setDesignItems] = useState<DesignItem[]>([])
   const [designSearch, setDesignSearch] = useState('')
   const [designCategory, setDesignCategory] = useState('Todos')
 
-  // Step 6: Adicionales & Jewelry
+  // Step 7: Adicionales & Jewelry
   const [additionalItems, setAdditionalItems] = useState<AdditionalItem[]>([])
   const [jewelryItems, setJewelryItems] = useState<JewelryItem[]>([])
 
-  // Step 7: Notes
+  // Step 8: Notes
   const [notes, setNotes] = useState('')
 
   // Cargar cotización existente (edición de borrador)
@@ -105,6 +131,7 @@ function NuevaCotizacionForm() {
       setResponsible(data.responsible ?? '')
       setSharePolicies(data.share_policies ?? false)
       setQuoteDate(data.date ?? new Date().toISOString().split('T')[0])
+      setNextMaintenance(data.next_maintenance_date ?? '')
 
       setSelectedSystem(SISTEMAS.find(s => s.name === data.system_name)?.id ?? '')
       setSelectedRetoque(RETOQUES.find(r => r.name === data.retoque_name)?.id ?? '')
@@ -114,13 +141,28 @@ function NuevaCotizacionForm() {
       setKappingExtra(data.kapping_extra ?? 0)
       setIgvRate(data.igv_rate ?? 0.18)
 
-      setPrepType(PREP_TIPOS.find(p => p.label === data.prep_type)?.id ?? 'estandar')
-      setNailType(data.nail_type ?? '')
-      setNailLayer(data.nail_layer ?? '')
-      setNailCondition(data.nail_condition ?? '')
+      setNailCurvature(data.nail_curvature ?? '')
+      setNailPlateStatus(data.nail_plate_status ?? '')
+      setSkinType(data.skin_type ?? '')
+      setNailMoisture(data.nail_moisture ?? '')
+      setPreviousProduct(data.previous_product ?? '')
+      setProductCondition(data.product_condition ?? '')
+
+      setPrimerType(data.primer_type ?? '')
+      setBaseType(data.base_type ?? '')
+      setServiceType(data.service_type ?? '')
+      setSystemMaterial(data.nail_system_material ?? '')
+      setTechniqueType(data.technique_type ?? '')
+      setNailShape(data.nail_shape ?? '')
+      setNailLength(data.nail_length ?? '')
+      setTechnicalNotes(data.technical_notes ?? '')
 
       setSizeChange(CAMBIO_TAMANIO.find(s => s.label === data.size_change_label)?.id ?? CAMBIO_TAMANIO[0].id)
-      setTipChange(CAMBIO_PUNTA.find(t => t.label === data.tip_change_label)?.id ?? CAMBIO_PUNTA[0].id)
+      setTipChange(
+        CAMBIO_PUNTA.find(t => t.label === data.tip_change_label)?.id
+        ?? (data.tip_change_label === 'Stilleto a Almendra' ? 'stiletto-almendra' : undefined)
+        ?? CAMBIO_PUNTA[0].id,
+      )
 
       setDesignItems((data.design_items ?? []).map((d: { id: string; name: string; nails_count: number; unit_price: number; comment?: string | null }) => ({
         id: d.id, name: d.name, nails: d.nails_count, unitPrice: d.unit_price, comment: d.comment ?? '',
@@ -143,7 +185,6 @@ function NuevaCotizacionForm() {
   const retoqueData = RETOQUES.find(r => r.id === selectedRetoque)
   const sizeChangeData = CAMBIO_TAMANIO.find(s => s.id === sizeChange)
   const tipChangeData = CAMBIO_PUNTA.find(t => t.id === tipChange)
-  const prepData = PREP_TIPOS.find(p => p.id === prepType)
 
   const calc = calculateQuote({
     systemPrice: systemData?.price ?? 0,
@@ -153,12 +194,75 @@ function NuevaCotizacionForm() {
     kappingExtra,
     sizeChangePrice: sizeChangeData?.price ?? 0,
     tipChangePrice: tipChangeData?.price ?? 0,
-    prepPrice: prepData?.price ?? 0,
+    prepPrice: 0,
     designsTotal: designItems.reduce((s, d) => s + d.unitPrice * d.nails, 0),
     additionalsTotal: additionalItems.reduce((s, a) => s + a.unitPrice, 0),
     jewelryTotal: jewelryItems.reduce((s, j) => s + j.unitPrice * j.qty, 0),
     igvRate,
   })
+
+  /** Costos visibles en la barra una vez que el usuario avanza de sección */
+  const visibleCostLines = useMemo(() => {
+    const lines: { id: string; label: string; amount: number; unlockAfterStep: number }[] = []
+
+    if (systemData && calc.systemPrice > 0) {
+      lines.push({ id: 'system', label: systemData.name, amount: calc.systemPrice, unlockAfterStep: 2 })
+    }
+    if (retoqueData && calc.retoquePrice > 0) {
+      lines.push({ id: 'retoque', label: retoqueData.name, amount: calc.retoquePrice, unlockAfterStep: 2 })
+    }
+    if (calc.retoqueExtra > 0) {
+      lines.push({
+        id: 'retoque-extra',
+        label: RETOQUE_SEMANAS[retoqueWeeks]?.label ?? 'Extra retoque',
+        amount: calc.retoqueExtra,
+        unlockAfterStep: 2,
+      })
+    }
+    if (calc.nailSizeExtra > 0) {
+      lines.push({ id: 'nail-size', label: `Extra uña #${nailNumber}`, amount: calc.nailSizeExtra, unlockAfterStep: 2 })
+    }
+    if (calc.kappingExtra > 0) {
+      lines.push({ id: 'kapping', label: 'Extra kapping', amount: calc.kappingExtra, unlockAfterStep: 2 })
+    }
+    if (sizeChangeData && calc.sizeChangePrice > 0) {
+      lines.push({ id: 'size', label: sizeChangeData.label, amount: calc.sizeChangePrice, unlockAfterStep: 5 })
+    }
+    if (tipChangeData && calc.tipChangePrice > 0) {
+      lines.push({ id: 'tip', label: tipChangeData.label, amount: calc.tipChangePrice, unlockAfterStep: 5 })
+    }
+    designItems.forEach((d) => {
+      const amount = d.unitPrice * d.nails
+      if (amount > 0) {
+        lines.push({ id: `design-${d.id}`, label: d.name, amount, unlockAfterStep: 6 })
+      }
+    })
+    additionalItems.forEach((a) => {
+      if (a.unitPrice > 0) {
+        lines.push({ id: `add-${a.id}`, label: a.name, amount: a.unitPrice, unlockAfterStep: 7 })
+      }
+    })
+    jewelryItems.forEach((j) => {
+      const amount = j.unitPrice * j.qty
+      if (amount > 0) {
+        lines.push({ id: `jewelry-${j.id}`, label: j.name, amount, unlockAfterStep: 7 })
+      }
+    })
+
+    return lines.filter((l) => step > l.unlockAfterStep)
+  }, [
+    step,
+    calc,
+    systemData,
+    retoqueData,
+    sizeChangeData,
+    tipChangeData,
+    designItems,
+    additionalItems,
+    jewelryItems,
+    retoqueWeeks,
+    nailNumber,
+  ])
 
   const filteredDesigns = DISENOS.filter(d => {
     const matchCat = designCategory === 'Todos' || d.category === designCategory
@@ -231,6 +335,7 @@ function NuevaCotizacionForm() {
       responsible: responsible || null,
       client_type: clientType,
       share_policies: sharePolicies,
+      next_maintenance_date: nextMaintenance || null,
       system_name: systemData?.name ?? null,
       system_price: calc.systemPrice,
       retoque_name: retoqueData?.name ?? null,
@@ -243,11 +348,22 @@ function NuevaCotizacionForm() {
       size_change_price: calc.sizeChangePrice,
       tip_change_label: tipChangeData?.label ?? null,
       tip_change_price: calc.tipChangePrice,
-      prep_type: prepData?.label ?? null,
-      prep_price: calc.prepPrice,
-      nail_type: nailType || null,
-      nail_layer: nailLayer || null,
-      nail_condition: nailCondition || null,
+      prep_type: null,
+      prep_price: 0,
+      nail_curvature: nailCurvature || null,
+      nail_plate_status: nailPlateStatus || null,
+      skin_type: skinType || null,
+      nail_moisture: nailMoisture || null,
+      previous_product: previousProduct || null,
+      product_condition: productCondition || null,
+      primer_type: primerType || null,
+      base_type: baseType || null,
+      service_type: serviceType || null,
+      nail_system_material: systemMaterial || null,
+      technique_type: techniqueType || null,
+      nail_shape: nailShape || null,
+      nail_length: nailLength || null,
+      technical_notes: technicalNotes || null,
       additional_items: additionalItems.map(a => ({
         id: a.id, name: a.name, quantity: 1, unit_price: a.unitPrice, total: a.unitPrice, comment: a.comment || null
       })),
@@ -373,12 +489,28 @@ function NuevaCotizacionForm() {
       </div>
 
       {/* Price badge floating */}
-      <div className="price-float">
-        <div className="price-float-main">
-          <div style={{ fontSize: '10px', color: 'var(--vk-text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Subtotal</div>
-          <div style={{ fontFamily: 'var(--font-heading)', fontSize: '22px', fontWeight: 700, color: 'var(--vk-pink-soft)', letterSpacing: '-0.02em' }}>{formatSoles(calc.subtotal)}</div>
+      <div className="price-float" style={{ marginBottom: '16px' }}>
+        <div className="price-float-breakdown">
+          {visibleCostLines.length === 0 ? (
+            <span className="price-float-empty">
+              {step <= 2 ? 'Los costos aparecerán al avanzar de sección' : 'Sin cargos en secciones anteriores'}
+            </span>
+          ) : (
+            visibleCostLines.map((line) => (
+              <div key={line.id} className="price-float-line">
+                <span className="price-float-line-label" title={line.label}>{line.label}</span>
+                <span className="price-float-line-amount">{formatSoles(line.amount)}</span>
+              </div>
+            ))
+          )}
         </div>
-        <div style={{ fontSize: '11px', color: 'var(--vk-text-subtle)' }}>+IGV: {formatSoles(calc.totalWithIgv)}</div>
+        <div className="price-float-totals">
+          <div className="price-float-main">
+            <div style={{ fontSize: '10px', color: 'var(--vk-text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Subtotal</div>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '22px', fontWeight: 700, color: 'var(--vk-pink-soft)', letterSpacing: '-0.02em' }}>{formatSoles(calc.subtotal)}</div>
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--vk-text-subtle)' }}>+IGV: {formatSoles(calc.totalWithIgv)}</div>
+        </div>
       </div>
 
       {/* =========== STEP 1: Cliente =========== */}
@@ -419,7 +551,11 @@ function NuevaCotizacionForm() {
                 </div>
               )}
             </div>
-            <div style={{ gridColumn: '1 / -1' }}>
+            <div>
+              <label style={labelStyle}>Próximo mantenimiento</label>
+              <input type="date" style={inputStyle} value={nextMaintenance} onChange={e => setNextMaintenance(e.target.value)} />
+            </div>
+            <div>
               <label style={labelStyle}>Responsable</label>
               <input style={inputStyle} value={responsible} onChange={e => setResponsible(e.target.value)} placeholder="Nombre de la técnica" />
             </div>
@@ -563,62 +699,59 @@ function NuevaCotizacionForm() {
         </div>
       )}
 
-      {/* =========== STEP 3: Preparación =========== */}
+      {/* =========== STEP 3: Diagnóstico =========== */}
       {step === 3 && (
         <div className="glass-card fade-in step-card">
-          <h2 style={sectionTitleStyle}>Preparación de uña</h2>
+          <h2 style={sectionTitleStyle}>Diagnóstico</h2>
           <div className="form-grid-2">
             <div>
-              <label style={labelStyle}>Tipo de preparación</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {PREP_TIPOS.map(p => (
-                  <label key={p.id} style={{
-                    display: 'flex', alignItems: 'center', gap: '11px',
-                    padding: '11px 14px', borderRadius: '12px', cursor: 'pointer',
-                    background: prepType === p.id ? 'var(--vk-pink-muted)' : 'var(--vk-surface)',
-                    border: prepType === p.id ? '1px solid rgba(243,50,131,0.3)' : '1px solid var(--vk-border)',
-                    transition: 'all 0.15s',
-                  }}>
-                    <input
-                      type="radio" name="prep-type" value={p.id}
-                      checked={prepType === p.id} onChange={() => setPrepType(p.id)}
-                      style={{ accentColor: 'var(--vk-pink)' }}
-                    />
-                    <span style={{ flex: 1, fontSize: '13px', color: 'var(--vk-text)' }}>{p.label}</span>
-                    {p.price > 0 && <span style={{ fontSize: '13px', color: 'var(--vk-warning)', fontWeight: 600 }}>+{formatSoles(p.price)}</span>}
-                  </label>
-                ))}
-              </div>
+              <label style={labelStyle}>Tipo de uña</label>
+              <select style={selectStyle} value={nailCurvature} onChange={e => setNailCurvature(e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {TIPO_UNA.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <div>
-                <label style={labelStyle}>Tipo de uña</label>
-                <select style={selectStyle} value={nailType} onChange={e => setNailType(e.target.value)}>
-                  <option value="">— Seleccionar —</option>
-                  {PREP_TIPO_UNA.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Capa</label>
-                <select style={selectStyle} value={nailLayer} onChange={e => setNailLayer(e.target.value)}>
-                  <option value="">— Seleccionar —</option>
-                  {PREP_CAPA.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Condición</label>
-                <select style={selectStyle} value={nailCondition} onChange={e => setNailCondition(e.target.value)}>
-                  <option value="">— Seleccionar —</option>
-                  {PREP_CONDICION.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+            <div>
+              <label style={labelStyle}>Estado de la lámina</label>
+              <select style={selectStyle} value={nailPlateStatus} onChange={e => setNailPlateStatus(e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {ESTADO_LAMINA.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Tipo de piel</label>
+              <select style={selectStyle} value={skinType} onChange={e => setSkinType(e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {TIPO_PIEL.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Humedad de la uña</label>
+              <select style={selectStyle} value={nailMoisture} onChange={e => setNailMoisture(e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {HUMEDAD_UNA.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Producto previo</label>
+              <select style={selectStyle} value={previousProduct} onChange={e => setPreviousProduct(e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {PRODUCTO_PREVIO.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Estado del producto</label>
+              <select style={selectStyle} value={productCondition} onChange={e => setProductCondition(e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {ESTADO_PRODUCTO.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
           </div>
         </div>
       )}
 
-      {/* =========== STEP 4: Tamaño y Punta =========== */}
-      {step === 4 && (
+      {/* =========== STEP 5: Tamaño y Punta =========== */}
+      {step === 5 && (
         <div className="glass-card fade-in step-card">
           <h2 style={sectionTitleStyle}>Cambio de tamaño y punta</h2>
           <div className="form-grid-2">
@@ -670,8 +803,8 @@ function NuevaCotizacionForm() {
         </div>
       )}
 
-      {/* =========== STEP 5: Diseños =========== */}
-      {step === 5 && (
+      {/* =========== STEP 6: Diseños =========== */}
+      {step === 6 && (
         <div className="fade-in">
           <div className="glass-card step-card" style={{ marginBottom: '16px' }}>
             <h2 style={sectionTitleStyle}>Diseños</h2>
@@ -765,8 +898,8 @@ function NuevaCotizacionForm() {
         </div>
       )}
 
-      {/* =========== STEP 6: Adicionales =========== */}
-      {step === 6 && (
+      {/* =========== STEP 7: Adicionales =========== */}
+      {step === 7 && (
         <div className="fade-in form-grid-2" style={{ gap: '16px' }}>
           <div className="glass-card step-card">
             <h2 style={{ ...sectionTitleStyle, fontSize: '18px', marginBottom: '16px' }}>Adicionales de servicio</h2>
@@ -838,8 +971,8 @@ function NuevaCotizacionForm() {
         </div>
       )}
 
-      {/* =========== STEP 7: Resumen =========== */}
-      {step === 7 && (
+      {/* =========== STEP 8: Resumen =========== */}
+      {step === 8 && (
         <div className="fade-in">
           <div className="glass-card step-card" style={{ marginBottom: '16px' }}>
             <h2 style={sectionTitleStyle}>Resumen de cotización</h2>
@@ -864,8 +997,9 @@ function NuevaCotizacionForm() {
               </div>
               <div>
                 <div style={{ fontSize: '10px', color: 'var(--vk-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '5px' }}>Uña</div>
-                {nailType && <div style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>{nailType}{nailLayer ? ` · ${nailLayer}` : ''}</div>}
-                {nailCondition && <div style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>Condición: {nailCondition}</div>}
+                {nailCurvature && <div style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>{nailCurvature}{nailPlateStatus ? ` · ${nailPlateStatus}` : ''}</div>}
+                {productCondition && <div style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>Producto: {productCondition}</div>}
+                {(nailShape || nailLength) && <div style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>{[nailShape, nailLength].filter(Boolean).join(' · ')}</div>}
                 <div style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>Núm {nailNumber}</div>
               </div>
             </div>
@@ -932,7 +1066,7 @@ function NuevaCotizacionForm() {
               )}
 
               {/* Cambios */}
-              {(calc.sizeChangePrice > 0 || calc.tipChangePrice > 0 || calc.prepPrice > 0) && (
+              {(calc.sizeChangePrice > 0 || calc.tipChangePrice > 0) && (
                 <div style={{ borderBottom: '1px solid var(--vk-border)' }}>
                   <div style={groupHeaderStyle}>Cambios</div>
                   {calc.sizeChangePrice > 0 && (
@@ -944,19 +1078,11 @@ function NuevaCotizacionForm() {
                     </div>
                   )}
                   {calc.tipChangePrice > 0 && (
-                    <div style={{ ...rowGridStyle, padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
+                    <div style={{ ...rowGridStyle, padding: '9px 16px', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>{tipChangeData?.label}</span>
                       <span />
                       <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(calc.tipChangePrice)}</span>
                       <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.tipChangePrice)}</span>
-                    </div>
-                  )}
-                  {calc.prepPrice > 0 && (
-                    <div style={{ ...rowGridStyle, padding: '9px 16px', fontSize: '13px' }}>
-                      <span style={{ color: 'var(--vk-text)' }}>Preparación {prepData?.label}</span>
-                      <span />
-                      <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(calc.prepPrice)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.prepPrice)}</span>
                     </div>
                   )}
                 </div>
@@ -1101,17 +1227,17 @@ function NuevaCotizacionForm() {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px', paddingBottom: '30px', gap: '12px', flexWrap: 'wrap' }}>
         <button
           className="btn-ghost"
-          onClick={() => setStep(s => Math.max(1, s - 1))}
+          onClick={() => setStep(s => adjacentStep(s, -1))}
           disabled={step === 1}
           style={{ opacity: step === 1 ? 0.4 : 1 }}
         >
           <ChevronLeft size={16} strokeWidth={2} />
           Anterior
         </button>
-        {step < 7 && (
+        {step < MAX_STEP && (
           <button
             className="btn-primary"
-            onClick={() => setStep(s => Math.min(7, s + 1))}
+            onClick={() => setStep(s => adjacentStep(s, 1))}
           >
             Siguiente
             <ChevronRight size={16} strokeWidth={2} />

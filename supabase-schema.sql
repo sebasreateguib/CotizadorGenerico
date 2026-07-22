@@ -69,6 +69,23 @@ CREATE TABLE IF NOT EXISTS public.quotes (
   nail_type TEXT,
   nail_layer TEXT,
   nail_condition TEXT,
+  -- Ficha de diagnóstico (informativos, no afectan el precio)
+  nail_curvature TEXT,
+  nail_plate_status TEXT,
+  skin_type TEXT,
+  nail_moisture TEXT,
+  previous_product TEXT,
+  product_condition TEXT,
+  -- Ficha de servicio técnico (informativos, no afectan el precio)
+  primer_type TEXT,
+  base_type TEXT,
+  service_type TEXT,
+  nail_system_material TEXT,
+  technique_type TEXT,
+  nail_shape TEXT,
+  nail_length TEXT,
+  next_maintenance_date DATE,
+  technical_notes TEXT,
   additional_items JSONB DEFAULT '[]'::jsonb,
   design_items JSONB DEFAULT '[]'::jsonb,
   jewelry_items JSONB DEFAULT '[]'::jsonb,
@@ -117,7 +134,14 @@ CREATE POLICY "Users can delete own clients" ON public.clients FOR DELETE USING 
 CREATE POLICY "Users can view own quotes" ON public.quotes FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Admin can view all quotes" ON public.quotes FOR SELECT USING (public.is_admin());
 CREATE POLICY "Users can insert own quotes" ON public.quotes FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own quotes" ON public.quotes FOR UPDATE USING (auth.uid() = user_id);
+-- Un técnico puede editar sus propias cotizaciones, pero no puede tocar el estado "pagada":
+-- ni marcarla como pagada, ni modificar una que ya esté pagada (eso queda solo para admin).
+CREATE POLICY "Users can update own quotes" ON public.quotes FOR UPDATE
+  USING (auth.uid() = user_id AND status <> 'pagada')
+  WITH CHECK (auth.uid() = user_id AND status <> 'pagada');
+CREATE POLICY "Admin can update all quotes" ON public.quotes FOR UPDATE
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 CREATE POLICY "Users can delete own quotes" ON public.quotes FOR DELETE USING (auth.uid() = user_id);
 
 -- 5. Indexes
@@ -292,3 +316,39 @@ GRANT EXECUTE ON FUNCTION
   public.admin_team_stats(),
   public.admin_quotes(TEXT, TEXT, UUID, INT, INT)
 TO authenticated;
+
+-- =========================================
+-- 8. Migración: Ficha de diagnóstico y servicio técnico
+-- Correr esto en proyectos donde la tabla "quotes" ya existía
+-- (el CREATE TABLE IF NOT EXISTS de arriba no agrega columnas nuevas).
+-- =========================================
+ALTER TABLE public.quotes
+  ADD COLUMN IF NOT EXISTS nail_curvature TEXT,
+  ADD COLUMN IF NOT EXISTS nail_plate_status TEXT,
+  ADD COLUMN IF NOT EXISTS skin_type TEXT,
+  ADD COLUMN IF NOT EXISTS nail_moisture TEXT,
+  ADD COLUMN IF NOT EXISTS previous_product TEXT,
+  ADD COLUMN IF NOT EXISTS product_condition TEXT,
+  ADD COLUMN IF NOT EXISTS primer_type TEXT,
+  ADD COLUMN IF NOT EXISTS base_type TEXT,
+  ADD COLUMN IF NOT EXISTS service_type TEXT,
+  ADD COLUMN IF NOT EXISTS nail_system_material TEXT,
+  ADD COLUMN IF NOT EXISTS technique_type TEXT,
+  ADD COLUMN IF NOT EXISTS nail_shape TEXT,
+  ADD COLUMN IF NOT EXISTS nail_length TEXT,
+  ADD COLUMN IF NOT EXISTS next_maintenance_date DATE,
+  ADD COLUMN IF NOT EXISTS technical_notes TEXT;
+
+-- =========================================
+-- 9. Migración: solo Admin puede confirmar pagos ("pagada")
+-- Correr esto en proyectos donde las policies de "quotes" ya existían.
+-- =========================================
+DROP POLICY IF EXISTS "Users can update own quotes" ON public.quotes;
+CREATE POLICY "Users can update own quotes" ON public.quotes FOR UPDATE
+  USING (auth.uid() = user_id AND status <> 'pagada')
+  WITH CHECK (auth.uid() = user_id AND status <> 'pagada');
+
+DROP POLICY IF EXISTS "Admin can update all quotes" ON public.quotes;
+CREATE POLICY "Admin can update all quotes" ON public.quotes FOR UPDATE
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());

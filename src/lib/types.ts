@@ -52,6 +52,23 @@ export interface Quote {
   nail_type: string | null
   nail_layer: string | null
   nail_condition: string | null
+  // Ficha de diagnóstico (informativos, no afectan el precio)
+  nail_curvature: string | null
+  nail_plate_status: string | null
+  skin_type: string | null
+  nail_moisture: string | null
+  previous_product: string | null
+  product_condition: string | null
+  // Ficha de servicio técnico (informativos, no afectan el precio)
+  primer_type: string | null
+  base_type: string | null
+  service_type: string | null
+  nail_system_material: string | null
+  technique_type: string | null
+  nail_shape: string | null
+  nail_length: string | null
+  next_maintenance_date: string | null
+  technical_notes: string | null
   // Adicionales
   additional_items: QuoteAdditional[]
   // Diseños
