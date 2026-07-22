@@ -5,6 +5,7 @@ export interface Profile {
   email: string
   full_name: string
   role: UserRole
+  commission_rate?: number
   created_at: string
 }
 

@@ -164,9 +164,14 @@ function NuevaCotizacionForm() {
         ?? CAMBIO_PUNTA[0].id,
       )
 
-      setDesignItems((data.design_items ?? []).map((d: { id: string; name: string; nails_count: number; unit_price: number; comment?: string | null }) => ({
-        id: d.id, name: d.name, nails: d.nails_count, unitPrice: d.unit_price, comment: d.comment ?? '',
-      })))
+      setDesignItems((data.design_items ?? []).map((d: { id: string; name: string; nails_count: number; unit_price: number; comment?: string | null }) => {
+        const catalog = DISENOS.find(x => x.id === d.id)
+        // Preferir precio por uña del catálogo (por si el borrador guardó el precio del set de 10)
+        const unitPrice = catalog
+          ? (catalog.pricePerNail > 0 ? catalog.pricePerNail : catalog.price)
+          : d.unit_price
+        return { id: d.id, name: d.name, nails: Math.min(d.nails_count, 10), unitPrice, comment: d.comment ?? '' }
+      }))
       setAdditionalItems((data.additional_items ?? []).map((a: { id: string; name: string; unit_price: number; comment?: string | null }) => ({
         id: a.id, name: a.name, unitPrice: a.unit_price, comment: a.comment ?? '',
       })))
@@ -273,12 +278,15 @@ function NuevaCotizacionForm() {
   const diasDesdeUltimaVisita = daysBetween(lastVisit)
 
   function addDesign(design: typeof DISENOS[0]) {
+    // price = set de 10 uñas; unitPrice = por uña (pricePerNail). Stickers usan price por unidad.
+    const unitPrice = design.pricePerNail > 0 ? design.pricePerNail : design.price
     setDesignItems(prev => {
       const existing = prev.find(d => d.id === design.id)
       if (existing) {
+        if (existing.nails >= 10) return prev
         return prev.map(d => d.id === design.id ? { ...d, nails: d.nails + 1 } : d)
       }
-      return [...prev, { id: design.id, name: design.name, nails: 1, unitPrice: design.price, comment: '' }]
+      return [...prev, { id: design.id, name: design.name, nails: 1, unitPrice, comment: '' }]
     })
   }
 
@@ -286,7 +294,7 @@ function NuevaCotizacionForm() {
     if (nails <= 0) {
       setDesignItems(prev => prev.filter(d => d.id !== id))
     } else {
-      setDesignItems(prev => prev.map(d => d.id === id ? { ...d, nails } : d))
+      setDesignItems(prev => prev.map(d => d.id === id ? { ...d, nails: Math.min(nails, 10) } : d))
     }
   }
 
@@ -853,7 +861,7 @@ function NuevaCotizacionForm() {
                       {d.name}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>
-                      {formatSoles(d.price)} / uña {inCart && <span style={{ color: 'var(--vk-pink)', fontWeight: 600 }}>× {inCart.nails}</span>}
+                      {formatSoles(d.pricePerNail > 0 ? d.pricePerNail : d.price)} / uña{inCart && <span style={{ color: 'var(--vk-pink)', fontWeight: 600 }}> × {inCart.nails}</span>}
                     </div>
                   </button>
                 )
@@ -876,7 +884,18 @@ function NuevaCotizacionForm() {
                         <Minus size={13} strokeWidth={2} />
                       </button>
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--vk-text)', minWidth: '20px', textAlign: 'center' }}>{d.nails}</span>
-                      <button onClick={() => updateDesignNails(d.id, d.nails + 1)} style={{ width: '26px', height: '26px', borderRadius: '7px', border: '1px solid var(--vk-border)', background: 'var(--vk-surface)', color: 'var(--vk-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <button
+                        onClick={() => updateDesignNails(d.id, d.nails + 1)}
+                        disabled={d.nails >= 10}
+                        style={{
+                          width: '26px', height: '26px', borderRadius: '7px',
+                          border: '1px solid var(--vk-border)', background: 'var(--vk-surface)',
+                          color: d.nails >= 10 ? 'var(--vk-text-subtle)' : 'var(--vk-text)',
+                          cursor: d.nails >= 10 ? 'default' : 'pointer',
+                          opacity: d.nails >= 10 ? 0.45 : 1,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
                         <Plus size={13} strokeWidth={2} />
                       </button>
                     </div>

@@ -10,16 +10,20 @@ import {
   Search, ArrowUpRight, SearchX, FileText,
   Crown, ShieldCheck, X,
 } from 'lucide-react'
+import CommissionRateEditor from '@/components/admin/CommissionRateEditor'
 
 export interface AdminQuoteRow {
   id: string
   client_name: string
   system_name: string | null
   subtotal: number
+  totalWithIgv: number
   status: 'borrador' | 'confirmada' | 'pagada'
   date: string
   technicianId: string
   technicianName: string
+  commissionRate: number
+  commissionAmount: number
 }
 
 export interface TechnicianStat {
@@ -30,6 +34,8 @@ export interface TechnicianStat {
   quotesCount: number
   totalRevenue: number
   pagadas: number
+  commissionRate: number
+  commissionTotal: number
 }
 
 const STATUS_FILTERS: { key: 'todas' | AdminQuoteRow['status']; label: string }[] = [
@@ -118,16 +124,23 @@ export default function AdminOverview({
               const isActive = tech === t.id
               const isTopSeller = i === 0 && t.totalRevenue > 0
               return (
-                <button
+                <div
                   key={t.id}
-                  type="button"
-                  onClick={() => updateParams({ tech: isActive ? null : t.id, page: null })}
-                  className="glass-card card-hover"
+                  className="glass-card"
                   style={{
-                    padding: '16px', textAlign: 'left', cursor: 'pointer',
+                    padding: '16px', textAlign: 'left',
                     border: isActive ? '1px solid var(--vk-pink-glow)' : '1px solid var(--vk-border)',
                     background: isActive ? 'var(--vk-pink-muted)' : undefined,
                     position: 'relative', overflow: 'hidden',
+                  }}
+                >
+                <button
+                  type="button"
+                  onClick={() => updateParams({ tech: isActive ? null : t.id, page: null })}
+                  className="card-hover"
+                  style={{
+                    width: '100%', padding: 0, textAlign: 'left', cursor: 'pointer',
+                    background: 'transparent', border: 'none', color: 'inherit',
                   }}
                 >
                   {isTopSeller && (
@@ -162,6 +175,11 @@ export default function AdminOverview({
                         <span style={{ fontSize: '11.5px', color: 'var(--vk-text-subtle)' }}>
                           {t.role === 'admin' ? 'Admin' : 'Técnico'}
                         </span>
+                        {t.commissionRate > 0 && (
+                          <span style={{ fontSize: '11px', color: 'var(--vk-text-subtle)' }}>
+                            · {(t.commissionRate * 100).toFixed(0)}%
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -179,7 +197,19 @@ export default function AdminOverview({
                       <div style={{ fontSize: '11.5px', color: 'var(--vk-text-subtle)' }}>cotizaciones</div>
                     </div>
                   </div>
+                  {t.commissionRate > 0 && (
+                    <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--vk-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{ fontSize: '11.5px', color: 'var(--vk-text-subtle)' }}>Comisión a pagar</span>
+                      <span style={{ fontFamily: 'var(--font-heading)', fontSize: '15px', fontWeight: 700, color: 'var(--vk-success)' }}>
+                        {formatSoles(t.commissionTotal)}
+                      </span>
+                    </div>
+                  )}
                 </button>
+                {t.role === 'tecnico' && (
+                  <CommissionRateEditor technicianId={t.id} initialRate={t.commissionRate} />
+                )}
+                </div>
               )
             })}
           </div>
@@ -230,10 +260,10 @@ export default function AdminOverview({
           )
         ) : (
           <div className="table-scroll">
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '860px' }}>
               <thead>
                 <tr style={{ background: 'rgba(0,0,0,0.25)' }}>
-                  {['Cliente', 'Técnico', 'Sistema', 'Subtotal', 'Estado', 'Fecha', ''].map((h) => (
+                  {['Cliente', 'Técnico', 'Sistema', 'Subtotal', 'Comisión', 'Estado', 'Fecha', ''].map((h) => (
                     <th key={h} style={{
                       textAlign: 'left', padding: '15px 20px',
                       fontSize: '11px', fontWeight: 600,
@@ -272,6 +302,12 @@ export default function AdminOverview({
                     </td>
                     <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: 600, color: 'var(--vk-pink-soft)' }}>
                       {formatSoles(q.subtotal || 0)}
+                    </td>
+                    <td style={{ padding: '16px 20px', fontSize: '13px', fontWeight: 600, color: q.status === 'pagada' ? 'var(--vk-success)' : 'var(--vk-text-subtle)' }}>
+                      {q.status === 'pagada' ? formatSoles(q.commissionAmount) : '—'}
+                      {q.commissionRate > 0 && q.status === 'pagada' && (
+                        <span style={{ fontSize: '11px', color: 'var(--vk-text-subtle)', fontWeight: 500 }}> ({(q.commissionRate * 100).toFixed(0)}%)</span>
+                      )}
                     </td>
                     <td style={{ padding: '16px 20px' }}>
                       <span className={`badge badge-${q.status}`}>

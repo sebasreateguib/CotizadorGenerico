@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatSoles } from '@/lib/data/calcular'
-import { ShieldCheck, Users, Wallet, FileText, CircleCheck } from 'lucide-react'
+import { ShieldCheck, Users, Wallet, FileText, CircleCheck, HandCoins } from 'lucide-react'
 import AdminOverview, { type AdminQuoteRow, type TechnicianStat } from '@/components/admin/AdminOverview'
 
 const PAGE_SIZE = 15
@@ -14,6 +14,8 @@ interface TeamRow {
   quotes_count: number
   total_revenue: number
   pagadas: number
+  commission_rate: number
+  commission_total: number
 }
 
 interface AdminQuoteRPCRow {
@@ -21,10 +23,13 @@ interface AdminQuoteRPCRow {
   client_name: string
   system_name: string | null
   subtotal: number
+  total_with_igv: number
   status: 'borrador' | 'confirmada' | 'pagada'
   date: string
   technician_id: string
   technician_name: string
+  commission_rate: number
+  commission_amount: number
   total_count: number
 }
 
@@ -57,7 +62,7 @@ export default async function AdminPage({
     }),
   ])
 
-  const g = globalRows?.[0] ?? { tecnicos: 0, total_cotizaciones: 0, total_facturado: 0, pagadas: 0 }
+  const g = globalRows?.[0] ?? { tecnicos: 0, total_cotizaciones: 0, total_facturado: 0, pagadas: 0, total_comisiones: 0 }
 
   const technicianStats: TechnicianStat[] = ((teamRows ?? []) as TeamRow[]).map(t => ({
     id: t.id,
@@ -67,6 +72,8 @@ export default async function AdminPage({
     quotesCount: t.quotes_count,
     totalRevenue: Number(t.total_revenue) || 0,
     pagadas: t.pagadas,
+    commissionRate: Number(t.commission_rate) || 0,
+    commissionTotal: Number(t.commission_total) || 0,
   }))
 
   const rows = (quoteRows ?? []) as AdminQuoteRPCRow[]
@@ -76,10 +83,13 @@ export default async function AdminPage({
     client_name: q.client_name,
     system_name: q.system_name,
     subtotal: Number(q.subtotal) || 0,
+    totalWithIgv: Number(q.total_with_igv) || 0,
     status: q.status,
     date: q.date,
     technicianId: q.technician_id,
     technicianName: q.technician_name,
+    commissionRate: Number(q.commission_rate) || 0,
+    commissionAmount: Number(q.commission_amount) || 0,
   }))
 
   const stats = [
@@ -87,6 +97,7 @@ export default async function AdminPage({
     { label: 'Cotizaciones del equipo', value: String(g.total_cotizaciones), Icon: FileText, accent: 'var(--vk-pink-soft)' },
     { label: 'Facturado en total', value: formatSoles(Number(g.total_facturado) || 0), Icon: Wallet, accent: 'var(--vk-warning)' },
     { label: 'Pagadas', value: String(g.pagadas), Icon: CircleCheck, accent: 'var(--vk-success)' },
+    { label: 'Comisiones a pagar', value: formatSoles(Number(g.total_comisiones) || 0), Icon: HandCoins, accent: 'var(--vk-error)' },
   ]
 
   return (
@@ -117,7 +128,7 @@ export default async function AdminPage({
         </div>
       </div>
 
-      <div className="stagger responsive-grid-4" style={{ marginBottom: '28px' }}>
+      <div className="stagger responsive-grid-5" style={{ marginBottom: '28px' }}>
         {stats.map(({ label, value, Icon, accent }, i) => (
           <div key={i} className="glass-card card-hover" style={{ padding: '18px', overflow: 'hidden', position: 'relative' }}>
             <div style={{

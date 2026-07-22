@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   email TEXT NOT NULL,
   full_name TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL DEFAULT 'tecnico' CHECK (role IN ('admin', 'tecnico')),
+  -- % de comisión de esta cuenta sobre lo que factura (ej. 0.40 = 40%).
+  commission_rate DECIMAL(5,4) NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -17,8 +19,14 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
-  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'full_name', ''), 'tecnico');
+  INSERT INTO public.profiles (id, email, full_name, role, commission_rate)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    'tecnico',
+    0
+  );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -118,30 +126,55 @@ RETURNS BOOLEAN AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
+-- Nota: se hace DROP POLICY IF EXISTS antes de cada CREATE POLICY para que
+-- este archivo se pueda volver a correr entero sin errores (a diferencia de
+-- CREATE TABLE/INDEX/FUNCTION, "CREATE POLICY" no tiene un "IF NOT EXISTS").
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Admin can view all profiles" ON public.profiles;
 CREATE POLICY "Admin can view all profiles" ON public.profiles FOR SELECT USING (public.is_admin());
--- WITH CHECK impide que un usuario cambie su propio "role" desde el cliente (evita auto-promoción a admin).
+-- WITH CHECK impide que un usuario cambie su propio "role" o "commission_rate" desde el cliente.
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE
   USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id AND role = (SELECT role FROM public.profiles WHERE id = auth.uid()));
+  WITH CHECK (
+    auth.uid() = id
+    AND role = (SELECT role FROM public.profiles WHERE id = auth.uid())
+    AND commission_rate = (SELECT commission_rate FROM public.profiles WHERE id = auth.uid())
+  );
+DROP POLICY IF EXISTS "Admin can update team profiles" ON public.profiles;
+CREATE POLICY "Admin can update team profiles" ON public.profiles FOR UPDATE
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 
+DROP POLICY IF EXISTS "Users can view own clients" ON public.clients;
 CREATE POLICY "Users can view own clients" ON public.clients FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admin can view all clients" ON public.clients;
 CREATE POLICY "Admin can view all clients" ON public.clients FOR SELECT USING (public.is_admin());
+DROP POLICY IF EXISTS "Users can insert own clients" ON public.clients;
 CREATE POLICY "Users can insert own clients" ON public.clients FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own clients" ON public.clients;
 CREATE POLICY "Users can update own clients" ON public.clients FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own clients" ON public.clients;
 CREATE POLICY "Users can delete own clients" ON public.clients FOR DELETE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view own quotes" ON public.quotes;
 CREATE POLICY "Users can view own quotes" ON public.quotes FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admin can view all quotes" ON public.quotes;
 CREATE POLICY "Admin can view all quotes" ON public.quotes FOR SELECT USING (public.is_admin());
+DROP POLICY IF EXISTS "Users can insert own quotes" ON public.quotes;
 CREATE POLICY "Users can insert own quotes" ON public.quotes FOR INSERT WITH CHECK (auth.uid() = user_id);
 -- Un técnico puede editar sus propias cotizaciones, pero no puede tocar el estado "pagada":
 -- ni marcarla como pagada, ni modificar una que ya esté pagada (eso queda solo para admin).
+DROP POLICY IF EXISTS "Users can update own quotes" ON public.quotes;
 CREATE POLICY "Users can update own quotes" ON public.quotes FOR UPDATE
   USING (auth.uid() = user_id AND status <> 'pagada')
   WITH CHECK (auth.uid() = user_id AND status <> 'pagada');
+DROP POLICY IF EXISTS "Admin can update all quotes" ON public.quotes;
 CREATE POLICY "Admin can update all quotes" ON public.quotes FOR UPDATE
   USING (public.is_admin())
   WITH CHECK (public.is_admin());
+DROP POLICY IF EXISTS "Users can delete own quotes" ON public.quotes;
 CREATE POLICY "Users can delete own quotes" ON public.quotes FOR DELETE USING (auth.uid() = user_id);
 
 -- 5. Indexes
@@ -248,21 +281,31 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
 $$;
 
 -- Stats globales del panel de admin
-CREATE OR REPLACE FUNCTION public.admin_global_stats()
-RETURNS TABLE(tecnicos INT, total_cotizaciones INT, total_facturado NUMERIC, pagadas INT)
+-- (se hace DROP primero porque cambia la lista de columnas del RETURNS TABLE,
+-- y "CREATE OR REPLACE FUNCTION" no permite cambiar el tipo de retorno).
+DROP FUNCTION IF EXISTS public.admin_global_stats();
+CREATE FUNCTION public.admin_global_stats()
+RETURNS TABLE(tecnicos INT, total_cotizaciones INT, total_facturado NUMERIC, pagadas INT, total_comisiones NUMERIC)
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
   SELECT
     (SELECT COUNT(*) FROM public.profiles WHERE role = 'tecnico')::int,
     (SELECT COUNT(*) FROM public.quotes)::int,
     (SELECT COALESCE(SUM(subtotal), 0) FROM public.quotes),
-    (SELECT COUNT(*) FROM public.quotes WHERE status = 'pagada')::int;
+    (SELECT COUNT(*) FROM public.quotes WHERE status = 'pagada')::int,
+    -- Comisión = % de la cuenta que hizo la cotización, sobre el total con IGV,
+    -- solo de las cotizaciones ya "pagadas" (dinero efectivamente cobrado).
+    (SELECT COALESCE(SUM(q.total_with_igv * COALESCE(p.commission_rate, 0)), 0)
+       FROM public.quotes q JOIN public.profiles p ON p.id = q.user_id
+       WHERE q.status = 'pagada');
 $$;
 
 -- Leaderboard del equipo (una fila por técnico/admin con sus totales)
-CREATE OR REPLACE FUNCTION public.admin_team_stats()
+DROP FUNCTION IF EXISTS public.admin_team_stats();
+CREATE FUNCTION public.admin_team_stats()
 RETURNS TABLE(
   id UUID, name TEXT, email TEXT, role TEXT,
-  quotes_count INT, total_revenue NUMERIC, pagadas INT
+  quotes_count INT, total_revenue NUMERIC, pagadas INT,
+  commission_rate NUMERIC, commission_total NUMERIC
 )
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
   SELECT p.id,
@@ -270,15 +313,18 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
     p.email, p.role,
     COUNT(q.id)::int,
     COALESCE(SUM(q.subtotal), 0),
-    COUNT(q.id) FILTER (WHERE q.status = 'pagada')::int
+    COUNT(q.id) FILTER (WHERE q.status = 'pagada')::int,
+    COALESCE(p.commission_rate, 0),
+    COALESCE(SUM(q.total_with_igv * COALESCE(p.commission_rate, 0)) FILTER (WHERE q.status = 'pagada'), 0)
   FROM public.profiles p
   LEFT JOIN public.quotes q ON q.user_id = p.id
-  GROUP BY p.id, p.full_name, p.email, p.role
+  GROUP BY p.id, p.full_name, p.email, p.role, p.commission_rate
   ORDER BY COALESCE(SUM(q.subtotal), 0) DESC;
 $$;
 
 -- Tabla de cotizaciones del equipo (paginada, con nombre de técnico y filtros)
-CREATE OR REPLACE FUNCTION public.admin_quotes(
+DROP FUNCTION IF EXISTS public.admin_quotes(TEXT, TEXT, UUID, INT, INT);
+CREATE FUNCTION public.admin_quotes(
   p_search TEXT DEFAULT '',
   p_status TEXT DEFAULT 'todas',
   p_tech UUID DEFAULT NULL,
@@ -286,13 +332,16 @@ CREATE OR REPLACE FUNCTION public.admin_quotes(
   p_offset INT DEFAULT 0
 )
 RETURNS TABLE(
-  id UUID, client_name TEXT, system_name TEXT, subtotal NUMERIC,
-  status TEXT, date DATE, technician_id UUID, technician_name TEXT, total_count INT
+  id UUID, client_name TEXT, system_name TEXT, subtotal NUMERIC, total_with_igv NUMERIC,
+  status TEXT, date DATE, technician_id UUID, technician_name TEXT,
+  commission_rate NUMERIC, commission_amount NUMERIC, total_count INT
 )
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
-  SELECT q.id, q.client_name, q.system_name, q.subtotal, q.status, q.date,
+  SELECT q.id, q.client_name, q.system_name, q.subtotal, q.total_with_igv, q.status, q.date,
     q.user_id,
     COALESCE(NULLIF(p.full_name, ''), p.email, 'Desconocido') AS technician_name,
+    COALESCE(p.commission_rate, 0),
+    CASE WHEN q.status = 'pagada' THEN q.total_with_igv * COALESCE(p.commission_rate, 0) ELSE 0 END,
     COUNT(*) OVER()::int AS total_count
   FROM public.quotes q
   LEFT JOIN public.profiles p ON p.id = q.user_id
@@ -319,8 +368,11 @@ TO authenticated;
 
 -- =========================================
 -- 8. Migración: Ficha de diagnóstico y servicio técnico
--- Correr esto en proyectos donde la tabla "quotes" ya existía
--- (el CREATE TABLE IF NOT EXISTS de arriba no agrega columnas nuevas).
+-- Necesario en proyectos donde la tabla "quotes" ya existía antes de estas
+-- columnas (el CREATE TABLE IF NOT EXISTS de arriba no agrega columnas
+-- nuevas a una tabla que ya existe). Las políticas de "pagada" ya quedaron
+-- resueltas en la sección 4 de arriba (es idempotente, se puede correr
+-- este archivo entero las veces que quieras).
 -- =========================================
 ALTER TABLE public.quotes
   ADD COLUMN IF NOT EXISTS nail_curvature TEXT,
@@ -340,15 +392,41 @@ ALTER TABLE public.quotes
   ADD COLUMN IF NOT EXISTS technical_notes TEXT;
 
 -- =========================================
--- 9. Migración: solo Admin puede confirmar pagos ("pagada")
--- Correr esto en proyectos donde las policies de "quotes" ya existían.
+-- 9. Migración: Comisiones por técnica
+-- Necesario en proyectos donde la tabla "profiles" ya existía.
 -- =========================================
-DROP POLICY IF EXISTS "Users can update own quotes" ON public.quotes;
-CREATE POLICY "Users can update own quotes" ON public.quotes FOR UPDATE
-  USING (auth.uid() = user_id AND status <> 'pagada')
-  WITH CHECK (auth.uid() = user_id AND status <> 'pagada');
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS commission_rate DECIMAL(5,4) NOT NULL DEFAULT 0;
 
-DROP POLICY IF EXISTS "Admin can update all quotes" ON public.quotes;
-CREATE POLICY "Admin can update all quotes" ON public.quotes FOR UPDATE
+-- Nuevos registros empiezan en 0%; el admin asigna desde /admin.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, role, commission_rate)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    'tecnico',
+    0
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =========================================
+-- 10. Migración: Admin asigna comisiones desde la app
+-- =========================================
+DROP POLICY IF EXISTS "Admin can update team profiles" ON public.profiles;
+CREATE POLICY "Admin can update team profiles" ON public.profiles FOR UPDATE
   USING (public.is_admin())
   WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE
+  USING (auth.uid() = id)
+  WITH CHECK (
+    auth.uid() = id
+    AND role = (SELECT role FROM public.profiles WHERE id = auth.uid())
+    AND commission_rate = (SELECT commission_rate FROM public.profiles WHERE id = auth.uid())
+  );
