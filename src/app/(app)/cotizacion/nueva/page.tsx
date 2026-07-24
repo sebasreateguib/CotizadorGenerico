@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { SISTEMAS, RETOQUES, RETOQUE_SEMANAS } from '@/lib/data/sistemas'
+import { SISTEMAS, SISTEMA_CATEGORIES, RETOQUES, RETOQUE_SEMANAS } from '@/lib/data/sistemas'
 import {
   ADICIONALES, CAMBIO_TAMANIO, CAMBIO_PUNTA,
   PEDRERIA, KAPPING_EXTRA
@@ -18,6 +18,7 @@ import {
 import {
   TIPO_UNA, ESTADO_LAMINA, TIPO_PIEL, HUMEDAD_UNA, PRODUCTO_PREVIO, ESTADO_PRODUCTO,
 } from '@/lib/data/diagnostico'
+import VkSelect from '@/components/ui/VkSelect'
 
 const STEPS = [
   { id: 1, label: 'Cliente', Icon: User },
@@ -42,7 +43,14 @@ function adjacentStep(current: number, direction: 1 | -1): number {
 
 interface DesignItem { id: string; name: string; nails: number; unitPrice: number; comment: string }
 interface JewelryItem { id: string; name: string; qty: number; unitPrice: number }
-interface AdditionalItem { id: string; name: string; unitPrice: number; comment: string }
+interface AdditionalItem {
+  id: string
+  name: string
+  unitPrice: number
+  quantity: number
+  perNail: boolean
+  comment: string
+}
 
 function daysBetween(dateStr: string): number | null {
   if (!dateStr) return null
@@ -172,9 +180,21 @@ function NuevaCotizacionForm() {
           : d.unit_price
         return { id: d.id, name: d.name, nails: Math.min(d.nails_count, 10), unitPrice, comment: d.comment ?? '' }
       }))
-      setAdditionalItems((data.additional_items ?? []).map((a: { id: string; name: string; unit_price: number; comment?: string | null }) => ({
-        id: a.id, name: a.name, unitPrice: a.unit_price, comment: a.comment ?? '',
-      })))
+      setAdditionalItems((data.additional_items ?? []).map((a: { id: string; name: string; quantity?: number; unit_price: number; comment?: string | null }) => {
+        const catalog = ADICIONALES.find(x => x.id === a.id)
+        const perNail = catalog?.perNail === true
+        const unitPrice = perNail
+          ? (catalog.pricePerNail ?? catalog.price / 10)
+          : (catalog?.price ?? a.unit_price)
+        return {
+          id: a.id,
+          name: a.name,
+          unitPrice,
+          quantity: perNail ? Math.min(Math.max(a.quantity ?? 1, 1), 10) : 1,
+          perNail,
+          comment: a.comment ?? '',
+        }
+      }))
       setJewelryItems((data.jewelry_items ?? []).map((j: { id: string; name: string; quantity: number; unit_price: number }) => ({
         id: j.id, name: j.name, qty: j.quantity, unitPrice: j.unit_price,
       })))
@@ -201,7 +221,7 @@ function NuevaCotizacionForm() {
     tipChangePrice: tipChangeData?.price ?? 0,
     prepPrice: 0,
     designsTotal: designItems.reduce((s, d) => s + d.unitPrice * d.nails, 0),
-    additionalsTotal: additionalItems.reduce((s, a) => s + a.unitPrice, 0),
+    additionalsTotal: additionalItems.reduce((s, a) => s + a.unitPrice * a.quantity, 0),
     jewelryTotal: jewelryItems.reduce((s, j) => s + j.unitPrice * j.qty, 0),
     igvRate,
   })
@@ -243,8 +263,9 @@ function NuevaCotizacionForm() {
       }
     })
     additionalItems.forEach((a) => {
-      if (a.unitPrice > 0) {
-        lines.push({ id: `add-${a.id}`, label: a.name, amount: a.unitPrice, unlockAfterStep: 7 })
+      const amount = a.unitPrice * a.quantity
+      if (amount > 0) {
+        lines.push({ id: `add-${a.id}`, label: a.name, amount, unlockAfterStep: 7 })
       }
     })
     jewelryItems.forEach((j) => {
@@ -307,8 +328,29 @@ function NuevaCotizacionForm() {
       if (prev.find(a => a.id === adicional.id)) {
         return prev.filter(a => a.id !== adicional.id)
       }
-      return [...prev, { id: adicional.id, name: adicional.name, unitPrice: adicional.price, comment: '' }]
+      const perNail = adicional.perNail === true
+      const unitPrice = perNail
+        ? (adicional.pricePerNail ?? adicional.price / 10)
+        : adicional.price
+      return [...prev, {
+        id: adicional.id,
+        name: adicional.name,
+        unitPrice,
+        quantity: 1,
+        perNail,
+        comment: '',
+      }]
     })
+  }
+
+  function updateAdditionalQuantity(id: string, quantity: number) {
+    if (quantity <= 0) {
+      setAdditionalItems(prev => prev.filter(a => a.id !== id))
+      return
+    }
+    setAdditionalItems(prev => prev.map(a =>
+      a.id === id ? { ...a, quantity: Math.min(quantity, 10) } : a
+    ))
   }
 
   function updateAdditionalComment(id: string, comment: string) {
@@ -373,7 +415,12 @@ function NuevaCotizacionForm() {
       nail_length: nailLength || null,
       technical_notes: technicalNotes || null,
       additional_items: additionalItems.map(a => ({
-        id: a.id, name: a.name, quantity: 1, unit_price: a.unitPrice, total: a.unitPrice, comment: a.comment || null
+        id: a.id,
+        name: a.name,
+        quantity: a.quantity,
+        unit_price: a.unitPrice,
+        total: a.unitPrice * a.quantity,
+        comment: a.comment || null,
       })),
       design_items: designItems.map(d => ({
         id: d.id, name: d.name, nails_count: d.nails, unit_price: d.unitPrice, total: d.unitPrice * d.nails, comment: d.comment || null
@@ -419,10 +466,6 @@ function NuevaCotizacionForm() {
   const labelStyle: React.CSSProperties = {
     display: 'block', fontSize: '11px', fontWeight: 600,
     color: 'var(--vk-text-muted)', marginBottom: '7px', textTransform: 'uppercase', letterSpacing: '0.08em',
-  }
-
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle, cursor: 'pointer',
   }
 
   const commentInputStyle: React.CSSProperties = {
@@ -544,10 +587,14 @@ function NuevaCotizacionForm() {
             </div>
             <div>
               <label style={labelStyle}>Frecuencia</label>
-              <select style={selectStyle} value={clientType} onChange={e => setClientType(e.target.value as 'nueva' | 'frecuente')}>
-                <option value="nueva">Clienta Nueva</option>
-                <option value="frecuente">Clienta Frecuente</option>
-              </select>
+              <VkSelect
+                value={clientType}
+                onChange={v => setClientType(v as 'nueva' | 'frecuente')}
+                options={[
+                  { value: 'nueva', label: 'Clienta Nueva' },
+                  { value: 'frecuente', label: 'Clienta Frecuente' },
+                ]}
+              />
             </div>
             <div>
               <label style={labelStyle}>Última visita</label>
@@ -599,16 +646,19 @@ function NuevaCotizacionForm() {
           <div style={{ display: 'grid', gap: '18px' }}>
             <div>
               <label style={labelStyle}>Sistema base</label>
-              <select style={selectStyle} value={selectedSystem} onChange={e => setSelectedSystem(e.target.value)}>
-                <option value="">— Sin sistema / Solo diseño —</option>
-                {['extension', 'reforzamiento', 'hibridas', 'esmaltado'].map(cat => (
-                  <optgroup key={cat} label={cat.charAt(0).toUpperCase() + cat.slice(1)}>
-                    {SISTEMAS.filter(s => s.category === cat).map(s => (
-                      <option key={s.id} value={s.id}>{s.name} — {s.price > 0 ? formatSoles(s.price) : 'Variable'}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              <VkSelect
+                value={selectedSystem}
+                onChange={setSelectedSystem}
+                allowEmpty
+                placeholder="— Sin sistema / Solo diseño —"
+                groups={SISTEMA_CATEGORIES.map(cat => ({
+                  label: cat.label,
+                  options: SISTEMAS.filter(s => s.category === cat.id).map(s => ({
+                    value: s.id,
+                    label: `${s.name} — ${formatSoles(s.price)} · ${formatSoles(s.pricePerNail)}/uña`,
+                  })),
+                }))}
+              />
               {systemData && (
                 <div style={{ marginTop: '8px', padding: '11px 14px', background: 'var(--vk-pink-muted)', border: '1px solid rgba(243,50,131,0.2)', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--vk-pink-soft)' }}>
@@ -629,22 +679,29 @@ function NuevaCotizacionForm() {
 
             <div>
               <label style={labelStyle}>Retoque (si aplica)</label>
-              <select style={selectStyle} value={selectedRetoque} onChange={e => setSelectedRetoque(e.target.value)}>
-                <option value="">— Sin retoque —</option>
-                {RETOQUES.map(r => (
-                  <option key={r.id} value={r.id}>{r.name} — {formatSoles(r.price)}</option>
-                ))}
-              </select>
+              <VkSelect
+                value={selectedRetoque}
+                onChange={setSelectedRetoque}
+                allowEmpty
+                placeholder="— Sin retoque —"
+                options={RETOQUES.map(r => ({
+                  value: r.id,
+                  label: `${r.name} — ${formatSoles(r.price)}`,
+                }))}
+              />
             </div>
 
             {selectedRetoque && (
               <div>
                 <label style={labelStyle}>Semanas desde último retoque</label>
-                <select style={selectStyle} value={retoqueWeeks} onChange={e => setRetoqueWeeks(Number(e.target.value))}>
-                  {RETOQUE_SEMANAS.map((s, i) => (
-                    <option key={i} value={i}>{s.label}</option>
-                  ))}
-                </select>
+                <VkSelect
+                  value={String(retoqueWeeks)}
+                  onChange={v => setRetoqueWeeks(Number(v))}
+                  options={RETOQUE_SEMANAS.map((s, i) => ({
+                    value: String(i),
+                    label: s.label,
+                  }))}
+                />
                 {RETOQUE_SEMANAS[retoqueWeeks]?.extra > 0 && (
                   <div style={{ marginTop: '7px', fontSize: '12px', padding: '9px 12px', background: 'rgba(245,169,75,0.08)', border: '1px solid rgba(245,169,75,0.25)', borderRadius: '8px', color: 'var(--vk-warning)', display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <AlertTriangle size={14} strokeWidth={2} />
@@ -657,40 +714,48 @@ function NuevaCotizacionForm() {
             <div className="form-grid-2">
               <div>
                 <label style={labelStyle}>Número de uña actual</label>
-                <select style={selectStyle} value={nailNumber} onChange={e => setNailNumber(Number(e.target.value))}>
-                  {Array.from({ length: 11 }, (_, i) => i + 1).map(n => {
+                <VkSelect
+                  value={String(nailNumber)}
+                  onChange={v => setNailNumber(Number(v))}
+                  options={Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
                     const extra = getNailSizeExtra(n)
-                    return (
-                      <option key={n} value={n}>
-                        Núm {n}{extra > 0 ? ` (+${formatSoles(extra)})` : ''}
-                      </option>
-                    )
+                    return {
+                      value: String(n),
+                      label: `N.º ${n}${extra > 0 ? ` (+${formatSoles(extra)})` : n <= 3 ? ' (incluido)' : ''}`,
+                    }
                   })}
-                </select>
-                {nailNumber > 4 && (
+                />
+                {nailNumber > 3 && (
                   <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--vk-warning)' }}>
-                    +{formatSoles(getNailSizeExtra(nailNumber))} por uña núm {nailNumber}
+                    +{formatSoles(getNailSizeExtra(nailNumber))} por largo N.º {nailNumber} (S/5 por nivel desde el 4)
                   </div>
                 )}
               </div>
 
               <div>
                 <label style={labelStyle}>Kapping extra (si aplica)</label>
-                <select style={selectStyle} value={kappingExtra} onChange={e => setKappingExtra(Number(e.target.value))}>
-                  {KAPPING_EXTRA.map((k, i) => (
-                    <option key={i} value={k.extra}>{k.label}</option>
-                  ))}
-                </select>
+                <VkSelect
+                  value={String(kappingExtra)}
+                  onChange={v => setKappingExtra(Number(v))}
+                  options={KAPPING_EXTRA.map(k => ({
+                    value: String(k.extra),
+                    label: k.label,
+                  }))}
+                />
               </div>
             </div>
 
             <div className="form-grid-2">
               <div>
                 <label style={labelStyle}>Tasa IGV</label>
-                <select style={selectStyle} value={igvRate} onChange={e => setIgvRate(Number(e.target.value))}>
-                  <option value={0}>Sin IGV (0%)</option>
-                  <option value={0.18}>Con IGV (18%)</option>
-                </select>
+                <VkSelect
+                  value={String(igvRate)}
+                  onChange={v => setIgvRate(Number(v))}
+                  options={[
+                    { value: '0', label: 'Sin IGV (0%)' },
+                    { value: '0.18', label: 'Con IGV (18%)' },
+                  ]}
+                />
               </div>
               <div>
                 <label style={labelStyle}>Comentario de sistema</label>
@@ -701,7 +766,7 @@ function NuevaCotizacionForm() {
             {/* Info box */}
             <div style={{ padding: '13px 16px', background: 'var(--vk-surface)', border: '1px solid var(--vk-border)', borderRadius: '10px', fontSize: '12px', color: 'var(--vk-text-subtle)', lineHeight: 1.6, display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
               <Info size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span>Sistema incluye un solo tono · Cobro adicional a partir de uña número 5 · Para kapping con uña natural mayor a 3 se suma cargo extra</span>
+              <span>Sistema incluye un solo tono · Largo incluido hasta N.º 3 · Desde N.º 4 se suman S/5 por cada nivel · Para kapping con uña natural mayor a 3 se suma cargo extra</span>
             </div>
           </div>
         </div>
@@ -714,45 +779,57 @@ function NuevaCotizacionForm() {
           <div className="form-grid-2">
             <div>
               <label style={labelStyle}>Tipo de uña</label>
-              <select style={selectStyle} value={nailCurvature} onChange={e => setNailCurvature(e.target.value)}>
-                <option value="">— Seleccionar —</option>
-                {TIPO_UNA.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <VkSelect
+                value={nailCurvature}
+                onChange={setNailCurvature}
+                allowEmpty
+                options={TIPO_UNA.map(t => ({ value: t, label: t }))}
+              />
             </div>
             <div>
               <label style={labelStyle}>Estado de la lámina</label>
-              <select style={selectStyle} value={nailPlateStatus} onChange={e => setNailPlateStatus(e.target.value)}>
-                <option value="">— Seleccionar —</option>
-                {ESTADO_LAMINA.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <VkSelect
+                value={nailPlateStatus}
+                onChange={setNailPlateStatus}
+                allowEmpty
+                options={ESTADO_LAMINA.map(c => ({ value: c, label: c }))}
+              />
             </div>
             <div>
               <label style={labelStyle}>Tipo de piel</label>
-              <select style={selectStyle} value={skinType} onChange={e => setSkinType(e.target.value)}>
-                <option value="">— Seleccionar —</option>
-                {TIPO_PIEL.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <VkSelect
+                value={skinType}
+                onChange={setSkinType}
+                allowEmpty
+                options={TIPO_PIEL.map(t => ({ value: t, label: t }))}
+              />
             </div>
             <div>
               <label style={labelStyle}>Humedad de la uña</label>
-              <select style={selectStyle} value={nailMoisture} onChange={e => setNailMoisture(e.target.value)}>
-                <option value="">— Seleccionar —</option>
-                {HUMEDAD_UNA.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <VkSelect
+                value={nailMoisture}
+                onChange={setNailMoisture}
+                allowEmpty
+                options={HUMEDAD_UNA.map(t => ({ value: t, label: t }))}
+              />
             </div>
             <div>
               <label style={labelStyle}>Producto previo</label>
-              <select style={selectStyle} value={previousProduct} onChange={e => setPreviousProduct(e.target.value)}>
-                <option value="">— Seleccionar —</option>
-                {PRODUCTO_PREVIO.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <VkSelect
+                value={previousProduct}
+                onChange={setPreviousProduct}
+                allowEmpty
+                options={PRODUCTO_PREVIO.map(t => ({ value: t, label: t }))}
+              />
             </div>
             <div>
               <label style={labelStyle}>Estado del producto</label>
-              <select style={selectStyle} value={productCondition} onChange={e => setProductCondition(e.target.value)}>
-                <option value="">— Seleccionar —</option>
-                {ESTADO_PRODUCTO.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <VkSelect
+                value={productCondition}
+                onChange={setProductCondition}
+                allowEmpty
+                options={ESTADO_PRODUCTO.map(t => ({ value: t, label: t }))}
+              />
             </div>
           </div>
         </div>
@@ -925,6 +1002,9 @@ function NuevaCotizacionForm() {
             <div className="scrollable-list-lg" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {ADICIONALES.map(a => {
                 const selected = additionalItems.find(x => x.id === a.id)
+                const unitLabel = a.perNail
+                  ? `${formatSoles(a.pricePerNail ?? a.price / 10)} / uña`
+                  : formatSoles(a.price)
                 return (
                   <div key={a.id} style={{ borderRadius: '10px', border: selected ? '1px solid rgba(243,50,131,0.25)' : '1px solid transparent', background: selected ? 'var(--vk-pink-muted)' : 'transparent', transition: 'all 0.15s' }}>
                     <label className="line-item-row" style={{ padding: '10px 12px', cursor: 'pointer' }}>
@@ -941,11 +1021,47 @@ function NuevaCotizacionForm() {
                         </span>
                       )}
                       <span style={{ fontSize: '13px', color: selected ? 'var(--vk-pink-soft)' : 'var(--vk-text-muted)', fontWeight: 600 }}>
-                        {formatSoles(a.price)}
+                        {unitLabel}
+                        {selected?.perNail && (
+                          <span style={{ color: 'var(--vk-pink)', fontWeight: 600 }}> × {selected.quantity}</span>
+                        )}
                       </span>
                     </label>
                     {selected && (
-                      <div style={{ padding: '0 12px 9px' }}>
+                      <div style={{ padding: '0 12px 9px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {selected.perNail && (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                            <span style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>Cantidad de uñas</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => updateAdditionalQuantity(a.id, selected.quantity - 1)}
+                                style={{ width: '26px', height: '26px', borderRadius: '7px', border: '1px solid var(--vk-border)', background: 'var(--vk-surface)', color: 'var(--vk-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <Minus size={13} strokeWidth={2} />
+                              </button>
+                              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--vk-text)', minWidth: '20px', textAlign: 'center' }}>{selected.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateAdditionalQuantity(a.id, selected.quantity + 1)}
+                                disabled={selected.quantity >= 10}
+                                style={{
+                                  width: '26px', height: '26px', borderRadius: '7px',
+                                  border: '1px solid var(--vk-border)', background: 'var(--vk-surface)',
+                                  color: selected.quantity >= 10 ? 'var(--vk-text-subtle)' : 'var(--vk-text)',
+                                  cursor: selected.quantity >= 10 ? 'default' : 'pointer',
+                                  opacity: selected.quantity >= 10 ? 0.45 : 1,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}
+                              >
+                                <Plus size={13} strokeWidth={2} />
+                              </button>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--vk-pink-soft)', minWidth: '64px', textAlign: 'right' }}>
+                                {formatSoles(selected.unitPrice * selected.quantity)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         <input
                           placeholder="Comentario..."
                           value={selected.comment}
@@ -1117,9 +1233,11 @@ function NuevaCotizacionForm() {
                         {a.name}
                         {a.comment && <span style={{ color: 'var(--vk-text-muted)', fontSize: '12px' }}> — {a.comment}</span>}
                       </span>
-                      <span style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>—</span>
+                      <span style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>
+                        {a.perNail ? `${a.quantity} uña${a.quantity !== 1 ? 's' : ''}` : '—'}
+                      </span>
                       <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(a.unitPrice)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(a.unitPrice)}</span>
+                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(a.unitPrice * a.quantity)}</span>
                     </div>
                   ))}
                 </div>

@@ -2,24 +2,23 @@
 export interface Adicional {
   id: string
   name: string
+  /** Precio del set (10 uñas) o precio fijo si no es por uña */
   price: number
   pricePerNail?: number
+  /** Si true, se cotiza por uña (quantity 1–10) usando pricePerNail */
+  perNail?: boolean
   time?: string
 }
 
 export const ADICIONALES: Adicional[] = [
   { id: 'manicure-rusa', name: 'Manicure Rusa', price: 50, pricePerNail: 5, time: '0:40' },
   { id: 'manicure-spa', name: 'Manicure Spa', price: 20, pricePerNail: 2 },
-  { id: 'retiro-acrilico', name: 'Retirado de acrílico', price: 35, pricePerNail: 3.5 },
-  { id: 'retiro-polygel', name: 'Retirado de Polygel / Gel X', price: 35, pricePerNail: 3.5 },
-  { id: 'retiro-rubber-polygel', name: 'Retirado de Rubber/Polygel n1-2', price: 25, pricePerNail: 2.5 },
-  { id: 'retiro-color-gel', name: 'Retirado de Color Gel', price: 25, pricePerNail: 2.5 },
-  { id: 'retiro-acrilico-otro-salon', name: 'Retiro Acrílico otro salón', price: 40, pricePerNail: 4, time: '1:00' },
-  { id: 'retiro-rubber-otro-salon', name: 'Retiro Rubber otro salón', price: 30, pricePerNail: 3 },
-  { id: 'retiro-esculpido-otro-salon', name: 'Retiro Esculpido otro salón', price: 50, pricePerNail: 5 },
-  { id: 'retiro-kapping-otro-salon', name: 'Retiro Kapping otro salón', price: 35, pricePerNail: 3.5, time: '0:30' },
-  { id: 'retiro-kapping-polygel-n4', name: 'Retiro kapping polygel/Rubber n4', price: 30, pricePerNail: 3, time: '0:40' },
-  { id: 'retiro-kapping-polygel-n4-otro', name: 'Retiro kapping polygel/Rubber n4 otro salón', price: 35, pricePerNail: 3.5, time: '0:40' },
+  // Retiros — tarifario es por set de 10; se cobran por uña
+  { id: 'retiro-esmalte-gel', name: 'Retiro de esmalte en gel', price: 20, pricePerNail: 2, perNail: true },
+  { id: 'retiro-vk-studio', name: 'Retiro VK Studio', price: 30, pricePerNail: 3, perNail: true },
+  { id: 'retiro-otro-salon', name: 'Retiro de otro salón', price: 40, pricePerNail: 4, perNail: true },
+  { id: 'retiro-total', name: 'Retiro total (100%)', price: 40, pricePerNail: 4, perNail: true },
+  // Otros
   { id: 'cambio-top-mate', name: 'Cambio top mate a brilloso', price: 13, pricePerNail: 1.3, time: '0:05' },
   { id: 'kapping-convexo', name: 'Kapping convexo', price: 20, pricePerNail: 2 },
 ]
@@ -27,7 +26,7 @@ export const ADICIONALES: Adicional[] = [
 // Cambio de tamaño de uña
 export const CAMBIO_TAMANIO = [
   { id: 'sin-cambio-0', label: 'Sin Cambio tamaño uña', number: 0, price: 0 },
-  { id: 'sin-cambio-1', label: 'Sin Cambio tamaño uña (num 1)', number: 1, price: 0 },
+  { id: 'cambio-1', label: 'Cambio tamaño uña (1 tamaño)', number: 1, price: 5 },
   { id: 'cambio-2', label: 'Cambio tamaño uña (2 tamaños)', number: 2, price: 10 },
   { id: 'cambio-3', label: 'Cambio tamaño uña (3 tamaños)', number: 3, price: 15 },
   { id: 'cambio-4', label: 'Cambio tamaño uña (4 tamaños)', number: 4, price: 20 },
@@ -76,16 +75,16 @@ export const PEDRERIA: Pedreria[] = [
   { id: 'perlas-todas-unas', name: 'Perlas en todas las uñas', price: 300, pricePerUnit: 300, category: 'Full Bling' },
 ]
 
-// Tamaño adicional por número de uña
+// Extra de largo: incluido hasta N.° 3; desde N.° 4 se suman S/5 por cada nivel
 export const TAMANIO_EXTRA = [
-  { range: '1-4', extra: 0, label: 'Uña 1-4 (sin cargo)' },
-  { range: '5', extra: 5, label: 'Uña 5 (+S/ 5)' },
-  { range: '6', extra: 10, label: 'Uña 6 (+S/ 10)' },
-  { range: '7', extra: 15, label: 'Uña 7 (+S/ 15)' },
-  { range: '8', extra: 20, label: 'Uña 8 (+S/ 20)' },
-  { range: '9', extra: 25, label: 'Uña 9 (+S/ 25)' },
-  { range: '10', extra: 30, label: 'Uña 10 (+S/ 30)' },
-  { range: '11', extra: 35, label: 'Uña 11 (+S/ 35)' },
+  { range: '1-3', extra: 0, label: 'Uña 1–3 (incluido)' },
+  { range: '4', extra: 5, label: 'Uña 4 (+S/ 5)' },
+  { range: '5', extra: 10, label: 'Uña 5 (+S/ 10)' },
+  { range: '6', extra: 15, label: 'Uña 6 (+S/ 15)' },
+  { range: '7', extra: 20, label: 'Uña 7 (+S/ 20)' },
+  { range: '8', extra: 25, label: 'Uña 8 (+S/ 25)' },
+  { range: '9', extra: 30, label: 'Uña 9 (+S/ 30)' },
+  { range: '10', extra: 35, label: 'Uña 10 (+S/ 35)' },
 ]
 
 // Preparación de uña

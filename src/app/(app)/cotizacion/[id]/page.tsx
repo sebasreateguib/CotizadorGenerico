@@ -382,7 +382,10 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
                 {quote.additional_items.map(a => (
                   <div key={a.id} className="quote-report-line">
                     <div className="quote-report-line-main">
-                      <div className="quote-report-line-name">{a.name}</div>
+                      <div className="quote-report-line-name">
+                        {a.name}
+                        {a.quantity > 1 && <span> (×{a.quantity})</span>}
+                      </div>
                       {a.comment && <div className="quote-report-line-sub">{a.comment}</div>}
                     </div>
                     <div className="quote-report-line-amount">{formatSoles(a.total)}</div>

@@ -24,13 +24,12 @@ export interface QuoteItem {
 }
 
 /**
- * Get the extra charge based on nail size number
- * Cobro adicional a partir de uña número 5 en cada sistema
+ * Extra de largo según tarifario:
+ * incluido hasta N.° 3; desde N.° 4 se suman S/5 por cada nivel.
  */
 export function getNailSizeExtra(nailNumber: number): number {
-  if (nailNumber <= 4) return 0
-  const extraMap: Record<number, number> = { 5: 5, 6: 10, 7: 15, 8: 20, 9: 25, 10: 30, 11: 35 }
-  return extraMap[nailNumber] ?? 35
+  if (nailNumber <= 3) return 0
+  return (nailNumber - 3) * 5
 }
 
 /**
