@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { formatSoles } from '@/lib/data/calcular'
 import { avatarGradient } from '@/lib/avatar'
+import { createClient } from '@/lib/supabase/client'
 import Pagination from '@/components/ui/Pagination'
 import {
   Search, ArrowUpRight, SearchX, FileText,
-  Crown, ShieldCheck, X,
+  Crown, ShieldCheck, X, Trash2, Loader2,
 } from 'lucide-react'
 import CommissionRateEditor from '@/components/admin/CommissionRateEditor'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
 export interface AdminQuoteRow {
   id: string
@@ -60,8 +62,30 @@ export default function AdminOverview({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const supabase = createClient()
   const [searchInput, setSearchInput] = useState(search)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<AdminQuoteRow | null>(null)
   const isFirst = useRef(true)
+
+  async function confirmDeleteQuote() {
+    if (!pendingDelete) return
+    const id = pendingDelete.id
+    setPendingDelete(null)
+    setDeletingId(id)
+    const { data, error } = await supabase.from('quotes').delete().eq('id', id).select('id')
+    setDeletingId(null)
+
+    if (error) {
+      alert('No se pudo eliminar la cotización: ' + error.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      alert('No se eliminó la cotización: no tienes permiso para borrarla (revisa las políticas RLS en Supabase).')
+      return
+    }
+    router.refresh()
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -318,14 +342,34 @@ export default function AdminOverview({
                       {new Date(q.date).toLocaleDateString('es-PE')}
                     </td>
                     <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                      <Link href={`/cotizacion/${q.id}`} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '4px',
-                        fontSize: '13px', color: 'var(--vk-pink-soft)',
-                        textDecoration: 'none', fontWeight: 500,
-                      }}>
-                        Ver detalle
-                        <ArrowUpRight size={14} strokeWidth={2} />
-                      </Link>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px' }}>
+                        <button
+                          onClick={() => setPendingDelete(q)}
+                          disabled={deletingId === q.id}
+                          title="Eliminar cotización"
+                          aria-label="Eliminar cotización"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'transparent', border: 'none', cursor: 'pointer',
+                            color: 'var(--vk-error)', padding: '2px', opacity: deletingId === q.id ? 0.5 : 0.7,
+                            transition: 'opacity 0.15s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = deletingId === q.id ? '0.5' : '0.7'}
+                        >
+                          {deletingId === q.id
+                            ? <Loader2 size={15} strokeWidth={2} style={{ animation: 'spin 0.8s linear infinite' }} />
+                            : <Trash2 size={15} strokeWidth={1.8} />}
+                        </button>
+                        <Link href={`/cotizacion/${q.id}`} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          fontSize: '13px', color: 'var(--vk-pink-soft)',
+                          textDecoration: 'none', fontWeight: 500,
+                        }}>
+                          Ver detalle
+                          <ArrowUpRight size={14} strokeWidth={2} />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -342,6 +386,20 @@ export default function AdminOverview({
         pageSize={pageSize}
         onPageChange={(p) => updateParams({ page: p === 1 ? null : String(p) })}
         itemLabel="cotizaciones"
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        danger
+        title="Eliminar cotización"
+        message={
+          pendingDelete?.status === 'pagada'
+            ? `Esta cotización de ${pendingDelete?.client_name || 'esta clienta'} ya está marcada como PAGADA. ¿Seguro que quieres eliminarla? Esta acción no se puede deshacer.`
+            : `¿Eliminar la cotización de ${pendingDelete?.client_name || 'esta clienta'}? Esta acción no se puede deshacer.`
+        }
+        confirmLabel="Eliminar"
+        onConfirm={confirmDeleteQuote}
+        onCancel={() => setPendingDelete(null)}
       />
     </div>
   )

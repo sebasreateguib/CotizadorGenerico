@@ -7,6 +7,7 @@ import { formatSoles } from '@/lib/data/calcular'
 import { avatarGradient } from '@/lib/avatar'
 import { createClient } from '@/lib/supabase/client'
 import Pagination from '@/components/ui/Pagination'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { FileText, Search, ArrowUpRight, Wallet, CircleCheck, Receipt, SearchX, Trash2, Loader2 } from 'lucide-react'
 
 export interface QuoteRow {
@@ -49,11 +50,13 @@ export default function QuotesExplorer({
   const supabase = createClient()
   const [searchInput, setSearchInput] = useState(search)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<QuoteRow | null>(null)
   const isFirst = useRef(true)
 
-  async function deleteDraft(id: string, clientName: string) {
-    const confirmed = window.confirm(`¿Eliminar el borrador de ${clientName || 'esta clienta'}? Esta acción no se puede deshacer.`)
-    if (!confirmed) return
+  async function confirmDeleteDraft() {
+    if (!pendingDelete) return
+    const id = pendingDelete.id
+    setPendingDelete(null)
     setDeletingId(id)
     const { error } = await supabase.from('quotes').delete().eq('id', id)
     setDeletingId(null)
@@ -216,7 +219,7 @@ export default function QuotesExplorer({
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px' }}>
                         {q.status === 'borrador' && (
                           <button
-                            onClick={() => deleteDraft(q.id, q.client_name)}
+                            onClick={() => setPendingDelete(q)}
                             disabled={deletingId === q.id}
                             title="Eliminar borrador"
                             aria-label="Eliminar borrador"
@@ -259,6 +262,16 @@ export default function QuotesExplorer({
         pageSize={pageSize}
         onPageChange={(p) => updateParams({ page: p === 1 ? null : String(p) })}
         itemLabel="cotizaciones"
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        danger
+        title="Eliminar borrador"
+        message={`¿Eliminar el borrador de ${pendingDelete?.client_name || 'esta clienta'}? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={confirmDeleteDraft}
+        onCancel={() => setPendingDelete(null)}
       />
     </div>
   )

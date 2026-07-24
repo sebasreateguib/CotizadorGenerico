@@ -176,6 +176,10 @@ CREATE POLICY "Admin can update all quotes" ON public.quotes FOR UPDATE
   WITH CHECK (public.is_admin());
 DROP POLICY IF EXISTS "Users can delete own quotes" ON public.quotes;
 CREATE POLICY "Users can delete own quotes" ON public.quotes FOR DELETE USING (auth.uid() = user_id);
+-- El admin puede borrar cualquier cotización del equipo, incluso "pagada"
+-- (ej. se registró por error, o se devolvió el dinero).
+DROP POLICY IF EXISTS "Admin can delete team quotes" ON public.quotes;
+CREATE POLICY "Admin can delete team quotes" ON public.quotes FOR DELETE USING (public.is_admin());
 
 -- 5. Indexes
 CREATE INDEX IF NOT EXISTS idx_quotes_user_id ON public.quotes(user_id);
@@ -292,9 +296,9 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
     (SELECT COUNT(*) FROM public.quotes)::int,
     (SELECT COALESCE(SUM(subtotal), 0) FROM public.quotes),
     (SELECT COUNT(*) FROM public.quotes WHERE status = 'pagada')::int,
-    -- Comisión = % de la cuenta que hizo la cotización, sobre el total con IGV,
+    -- Comisión = % de la cuenta que hizo la cotización, sobre el subtotal (sin IGV),
     -- solo de las cotizaciones ya "pagadas" (dinero efectivamente cobrado).
-    (SELECT COALESCE(SUM(q.total_with_igv * COALESCE(p.commission_rate, 0)), 0)
+    (SELECT COALESCE(SUM(q.subtotal * COALESCE(p.commission_rate, 0)), 0)
        FROM public.quotes q JOIN public.profiles p ON p.id = q.user_id
        WHERE q.status = 'pagada');
 $$;
@@ -315,7 +319,7 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
     COALESCE(SUM(q.subtotal), 0),
     COUNT(q.id) FILTER (WHERE q.status = 'pagada')::int,
     COALESCE(p.commission_rate, 0),
-    COALESCE(SUM(q.total_with_igv * COALESCE(p.commission_rate, 0)) FILTER (WHERE q.status = 'pagada'), 0)
+    COALESCE(SUM(q.subtotal * COALESCE(p.commission_rate, 0)) FILTER (WHERE q.status = 'pagada'), 0)
   FROM public.profiles p
   LEFT JOIN public.quotes q ON q.user_id = p.id
   GROUP BY p.id, p.full_name, p.email, p.role, p.commission_rate
@@ -341,7 +345,7 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
     q.user_id,
     COALESCE(NULLIF(p.full_name, ''), p.email, 'Desconocido') AS technician_name,
     COALESCE(p.commission_rate, 0),
-    CASE WHEN q.status = 'pagada' THEN q.total_with_igv * COALESCE(p.commission_rate, 0) ELSE 0 END,
+    CASE WHEN q.status = 'pagada' THEN q.subtotal * COALESCE(p.commission_rate, 0) ELSE 0 END,
     COUNT(*) OVER()::int AS total_count
   FROM public.quotes q
   LEFT JOIN public.profiles p ON p.id = q.user_id
@@ -356,6 +360,27 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
   LIMIT p_limit OFFSET p_offset;
 $$;
 
+-- Comisiones por técnico, agrupadas por mes (solo cotizaciones "pagadas")
+DROP FUNCTION IF EXISTS public.admin_commissions_by_month();
+CREATE FUNCTION public.admin_commissions_by_month()
+RETURNS TABLE(
+  technician_id UUID, technician_name TEXT, month DATE,
+  quotes_count INT, commission_total NUMERIC
+)
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
+  SELECT
+    p.id,
+    COALESCE(NULLIF(p.full_name, ''), p.email) AS name,
+    date_trunc('month', q.date)::date AS month,
+    COUNT(*)::int,
+    COALESCE(SUM(q.subtotal * COALESCE(p.commission_rate, 0)), 0)
+  FROM public.quotes q
+  JOIN public.profiles p ON p.id = q.user_id
+  WHERE q.status = 'pagada'
+  GROUP BY p.id, name, date_trunc('month', q.date)
+  ORDER BY name, month DESC;
+$$;
+
 GRANT EXECUTE ON FUNCTION
   public.cotizaciones_summary(TEXT, TEXT),
   public.clientes_directory(TEXT, TEXT, INT, INT),
@@ -363,7 +388,8 @@ GRANT EXECUTE ON FUNCTION
   public.cliente_detalle_stats(TEXT),
   public.admin_global_stats(),
   public.admin_team_stats(),
-  public.admin_quotes(TEXT, TEXT, UUID, INT, INT)
+  public.admin_quotes(TEXT, TEXT, UUID, INT, INT),
+  public.admin_commissions_by_month()
 TO authenticated;
 
 -- =========================================

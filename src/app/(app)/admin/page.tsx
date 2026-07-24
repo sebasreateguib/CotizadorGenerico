@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatSoles } from '@/lib/data/calcular'
 import { ShieldCheck, Users, Wallet, FileText, CircleCheck, HandCoins } from 'lucide-react'
 import AdminOverview, { type AdminQuoteRow, type TechnicianStat } from '@/components/admin/AdminOverview'
+import CommissionsByMonth, { type CommissionMonthRow } from '@/components/admin/CommissionsByMonth'
 
 const PAGE_SIZE = 15
 
@@ -15,6 +16,14 @@ interface TeamRow {
   total_revenue: number
   pagadas: number
   commission_rate: number
+  commission_total: number
+}
+
+interface CommissionMonthRPCRow {
+  technician_id: string
+  technician_name: string
+  month: string
+  quotes_count: number
   commission_total: number
 }
 
@@ -54,12 +63,13 @@ export default async function AdminPage({
   const tech = sp.tech ?? null
   const offset = (page - 1) * PAGE_SIZE
 
-  const [{ data: globalRows }, { data: teamRows }, { data: quoteRows }] = await Promise.all([
+  const [{ data: globalRows }, { data: teamRows }, { data: quoteRows }, { data: commissionMonthRows }] = await Promise.all([
     supabase.rpc('admin_global_stats'),
     supabase.rpc('admin_team_stats'),
     supabase.rpc('admin_quotes', {
       p_search: safeSearch, p_status: status, p_tech: tech, p_limit: PAGE_SIZE, p_offset: offset,
     }),
+    supabase.rpc('admin_commissions_by_month'),
   ])
 
   const g = globalRows?.[0] ?? { tecnicos: 0, total_cotizaciones: 0, total_facturado: 0, pagadas: 0, total_comisiones: 0 }
@@ -90,6 +100,14 @@ export default async function AdminPage({
     technicianName: q.technician_name,
     commissionRate: Number(q.commission_rate) || 0,
     commissionAmount: Number(q.commission_amount) || 0,
+  }))
+
+  const commissionMonthList: CommissionMonthRow[] = ((commissionMonthRows ?? []) as CommissionMonthRPCRow[]).map(r => ({
+    technicianId: r.technician_id,
+    technicianName: r.technician_name,
+    month: r.month,
+    quotesCount: r.quotes_count,
+    commissionTotal: Number(r.commission_total) || 0,
   }))
 
   const stats = [
@@ -145,6 +163,8 @@ export default async function AdminPage({
           </div>
         ))}
       </div>
+
+      <CommissionsByMonth rows={commissionMonthList} />
 
       <AdminOverview
         quotes={quoteList}

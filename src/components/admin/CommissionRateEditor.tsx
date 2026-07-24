@@ -30,15 +30,21 @@ export default function CommissionRateEditor({
     setSaved(false)
 
     const supabase = createClient()
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .update({ commission_rate: parsed / 100 })
       .eq('id', technicianId)
+      .select('id')
 
     setSaving(false)
 
     if (error) {
       alert('No se pudo guardar la comisión: ' + error.message)
+      return
+    }
+
+    if (!data || data.length === 0) {
+      alert('No se guardó la comisión: no tienes permiso para editar este perfil (revisa las políticas RLS en Supabase).')
       return
     }
 
