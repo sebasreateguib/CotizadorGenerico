@@ -479,10 +479,6 @@ function NuevaCotizacionForm() {
     color: 'var(--vk-text)', marginBottom: '22px', letterSpacing: '-0.02em',
   }
 
-  const rowGridStyle: React.CSSProperties = {
-    display: 'grid', gridTemplateColumns: '1fr 90px 100px 90px', gap: '0', alignItems: 'center', minWidth: '460px',
-  }
-
   const groupHeaderStyle: React.CSSProperties = {
     padding: '5px 16px 3px', fontSize: '10px', fontWeight: 700,
     color: 'var(--vk-pink-soft)', textTransform: 'uppercase', letterSpacing: '0.12em',
@@ -1143,7 +1139,7 @@ function NuevaCotizacionForm() {
             <div style={{ border: '1px solid var(--vk-border)', borderRadius: '14px', overflow: 'hidden', marginBottom: '22px' }}>
             <div className="table-scroll">
               {/* Header */}
-              <div style={{ ...rowGridStyle, background: 'rgba(0,0,0,0.25)', padding: '11px 16px', fontSize: '10px', fontWeight: 600, color: 'var(--vk-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid var(--vk-border)' }}>
+              <div className="quote-summary-row quote-summary-header" style={{ background: 'rgba(0,0,0,0.25)', padding: '11px 16px', fontSize: '10px', fontWeight: 600, color: 'var(--vk-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid var(--vk-border)' }}>
                 <span>Concepto</span>
                 <span style={{ textAlign: 'center' }}>Uñas</span>
                 <span style={{ textAlign: 'right' }}>Precio</span>
@@ -1155,45 +1151,45 @@ function NuevaCotizacionForm() {
                 <div style={{ borderBottom: '1px solid var(--vk-border)' }}>
                   <div style={groupHeaderStyle}>Sistema</div>
                   {systemData && (
-                    <div style={{ ...rowGridStyle, padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
+                    <div className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>
                         {systemData.name}
                         {systemComment && <span style={{ color: 'var(--vk-text-muted)', fontSize: '12px' }}> — {systemComment}</span>}
                       </span>
-                      <span style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>—</span>
-                      <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(systemData.price)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.systemPrice)}</span>
+                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>—</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(systemData.price)}</span>
+                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.systemPrice)}</span>
                     </div>
                   )}
                   {retoqueData && (
-                    <div style={{ ...rowGridStyle, padding: '9px 16px', borderBottom: calc.retoqueExtra > 0 ? '1px solid var(--vk-border)' : 'none', fontSize: '13px' }}>
+                    <div className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: calc.retoqueExtra > 0 ? '1px solid var(--vk-border)' : 'none', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>{retoqueData.name}</span>
-                      <span style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>—</span>
-                      <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(retoqueData.price)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.retoquePrice)}</span>
+                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>—</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(retoqueData.price)}</span>
+                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.retoquePrice)}</span>
                     </div>
                   )}
                   {calc.retoqueExtra > 0 && (
-                    <div style={{ ...rowGridStyle, padding: '7px 16px', fontSize: '12px' }}>
+                    <div className="quote-summary-row" style={{ padding: '7px 16px', fontSize: '12px' }}>
                       <span style={{ color: 'var(--vk-warning)', paddingLeft: '14px' }}>Cargo semanas de retoque</span>
                       <span />
-                      <span style={{ textAlign: 'right', color: 'var(--vk-warning)' }}>+{formatSoles(calc.retoqueExtra)}</span>
+                      <span data-label="Monto" style={{ textAlign: 'right', color: 'var(--vk-warning)' }}>+{formatSoles(calc.retoqueExtra)}</span>
                       <span />
                     </div>
                   )}
                   {calc.nailSizeExtra > 0 && (
-                    <div style={{ ...rowGridStyle, padding: '7px 16px', fontSize: '12px' }}>
+                    <div className="quote-summary-row" style={{ padding: '7px 16px', fontSize: '12px' }}>
                       <span style={{ color: 'var(--vk-warning)', paddingLeft: '14px' }}>Extra uña núm {nailNumber}</span>
                       <span />
-                      <span style={{ textAlign: 'right', color: 'var(--vk-warning)' }}>+{formatSoles(calc.nailSizeExtra)}</span>
+                      <span data-label="Monto" style={{ textAlign: 'right', color: 'var(--vk-warning)' }}>+{formatSoles(calc.nailSizeExtra)}</span>
                       <span />
                     </div>
                   )}
                   {kappingExtra > 0 && (
-                    <div style={{ ...rowGridStyle, padding: '7px 16px', fontSize: '12px' }}>
+                    <div className="quote-summary-row" style={{ padding: '7px 16px', fontSize: '12px' }}>
                       <span style={{ color: 'var(--vk-warning)', paddingLeft: '14px' }}>Extra kapping</span>
                       <span />
-                      <span style={{ textAlign: 'right', color: 'var(--vk-warning)' }}>+{formatSoles(kappingExtra)}</span>
+                      <span data-label="Monto" style={{ textAlign: 'right', color: 'var(--vk-warning)' }}>+{formatSoles(kappingExtra)}</span>
                       <span />
                     </div>
                   )}
@@ -1205,19 +1201,19 @@ function NuevaCotizacionForm() {
                 <div style={{ borderBottom: '1px solid var(--vk-border)' }}>
                   <div style={groupHeaderStyle}>Cambios</div>
                   {calc.sizeChangePrice > 0 && (
-                    <div style={{ ...rowGridStyle, padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
+                    <div className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>{sizeChangeData?.label}</span>
                       <span />
-                      <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(calc.sizeChangePrice)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.sizeChangePrice)}</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(calc.sizeChangePrice)}</span>
+                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.sizeChangePrice)}</span>
                     </div>
                   )}
                   {calc.tipChangePrice > 0 && (
-                    <div style={{ ...rowGridStyle, padding: '9px 16px', fontSize: '13px' }}>
+                    <div className="quote-summary-row" style={{ padding: '9px 16px', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>{tipChangeData?.label}</span>
                       <span />
-                      <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(calc.tipChangePrice)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.tipChangePrice)}</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(calc.tipChangePrice)}</span>
+                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.tipChangePrice)}</span>
                     </div>
                   )}
                 </div>
@@ -1228,16 +1224,16 @@ function NuevaCotizacionForm() {
                 <div style={{ borderBottom: '1px solid var(--vk-border)' }}>
                   <div style={groupHeaderStyle}>Adicionales</div>
                   {additionalItems.map(a => (
-                    <div key={a.id} style={{ ...rowGridStyle, padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
+                    <div key={a.id} className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>
                         {a.name}
                         {a.comment && <span style={{ color: 'var(--vk-text-muted)', fontSize: '12px' }}> — {a.comment}</span>}
                       </span>
-                      <span style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>
+                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>
                         {a.perNail ? `${a.quantity} uña${a.quantity !== 1 ? 's' : ''}` : '—'}
                       </span>
-                      <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(a.unitPrice)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(a.unitPrice * a.quantity)}</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(a.unitPrice)}</span>
+                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(a.unitPrice * a.quantity)}</span>
                     </div>
                   ))}
                 </div>
@@ -1248,11 +1244,11 @@ function NuevaCotizacionForm() {
                 <div style={{ borderBottom: '1px solid var(--vk-border)' }}>
                   <div style={groupHeaderStyle}>Pedrería</div>
                   {jewelryItems.map(j => (
-                    <div key={j.id} style={{ ...rowGridStyle, padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
+                    <div key={j.id} className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>{j.name}</span>
-                      <span style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>×{j.qty}</span>
-                      <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(j.unitPrice)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(j.unitPrice * j.qty)}</span>
+                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>×{j.qty}</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(j.unitPrice)}</span>
+                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(j.unitPrice * j.qty)}</span>
                     </div>
                   ))}
                 </div>
@@ -1263,14 +1259,14 @@ function NuevaCotizacionForm() {
                 <div>
                   <div style={groupHeaderStyle}>Diseño</div>
                   {designItems.map(d => (
-                    <div key={d.id} style={{ ...rowGridStyle, padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
+                    <div key={d.id} className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>
                         {d.name}
                         {d.comment && <span style={{ color: 'var(--vk-text-muted)', fontSize: '12px' }}> — {d.comment}</span>}
                       </span>
-                      <span style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>{d.nails} uña{d.nails !== 1 ? 's' : ''}</span>
-                      <span style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(d.unitPrice)}</span>
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(d.unitPrice * d.nails)}</span>
+                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>{d.nails} uña{d.nails !== 1 ? 's' : ''}</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(d.unitPrice)}</span>
+                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(d.unitPrice * d.nails)}</span>
                     </div>
                   ))}
                 </div>
@@ -1305,24 +1301,23 @@ function NuevaCotizacionForm() {
               <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--vk-pink)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '12px' }}>
                 Resumen de servicio Vk Studio
               </div>
-              <div className="table-scroll">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 90px 110px', gap: '8px 0', fontSize: '13px', minWidth: '480px' }}>
+              <div className="service-summary-row quote-summary-header" style={{ fontSize: '13px' }}>
                 <span style={{ color: 'var(--vk-text-subtle)', fontWeight: 600 }}>Clienta</span>
                 <span style={{ color: 'var(--vk-text-subtle)', fontWeight: 600, textAlign: 'center' }}>Diseño / Detalle</span>
                 <span style={{ color: 'var(--vk-text-subtle)', fontWeight: 600, textAlign: 'center' }}>Tiempo</span>
                 <span style={{ color: 'var(--vk-text-subtle)', fontWeight: 600, textAlign: 'right' }}>Precio + IGV</span>
-
+              </div>
+              <div className="service-summary-row" style={{ fontSize: '13px' }}>
                 <span style={{ color: 'var(--vk-text)', fontWeight: 500, paddingTop: '8px', borderTop: '1px solid var(--vk-border)' }}>{clientName || '—'}</span>
-                <span style={{ paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'center', fontSize: '12px', color: 'var(--vk-text-muted)' }}>
+                <span data-label="Diseño / Detalle" style={{ paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'center', fontSize: '12px', color: 'var(--vk-text-muted)' }}>
                   {[systemData?.name, retoqueData?.name].filter(Boolean).join(' + ') || '—'}
                 </span>
-                <span style={{ color: 'var(--vk-text-muted)', paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'center' }}>
+                <span data-label="Tiempo" style={{ color: 'var(--vk-text-muted)', paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'center' }}>
                   {systemData?.time ?? '—'}
                 </span>
-                <span style={{ color: 'var(--vk-pink-soft)', fontWeight: 700, paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'right' }}>
+                <span data-label="Precio + IGV" style={{ color: 'var(--vk-pink-soft)', fontWeight: 700, paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'right' }}>
                   {formatSoles(igvRate > 0 ? calc.totalWithIgv : calc.subtotal)}
                 </span>
-              </div>
               </div>
             </div>
 

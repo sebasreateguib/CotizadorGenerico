@@ -1033,7 +1033,7 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
   .admin-team-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1203,6 +1203,56 @@ textarea:focus {
 /* Contenedor exportable de la cotización — más compacto en mobile */
 .pdf-container {
   padding: 0;
+}
+
+/* Tablas del resumen de cotización (Concepto/Uñas/Precio/Resumen y
+   Resumen de servicio Vk Studio). En mobile, en vez de forzar scroll
+   horizontal (columnas se cortaban y el usuario no sabía que podía
+   deslizar), cada fila se apila y cada valor muestra su etiqueta. */
+.quote-summary-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 100px 90px;
+  gap: 0;
+  align-items: center;
+  min-width: 460px;
+}
+.service-summary-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 90px 110px;
+  gap: 8px 0;
+  min-width: 480px;
+}
+@media (max-width: 640px) {
+  .quote-summary-row,
+  .service-summary-row {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    row-gap: 4px;
+  }
+  .quote-summary-header {
+    display: none;
+  }
+  .quote-summary-row > span:empty,
+  .service-summary-row > span:empty {
+    display: none;
+  }
+  .quote-summary-row > span[data-label],
+  .service-summary-row > span[data-label] {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .quote-summary-row > span[data-label]::before,
+  .service-summary-row > span[data-label]::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--vk-text-subtle);
+    flex-shrink: 0;
+  }
 }
 
 /* ===== Quote report — editorial layout ===== */
