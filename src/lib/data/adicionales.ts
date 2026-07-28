@@ -21,9 +21,9 @@ export const ADICIONALES: Adicional[] = [
   // Otros
   { id: 'cambio-top-mate', name: 'Cambio top mate a brilloso', price: 13, pricePerNail: 1.3, time: '0:05' },
   { id: 'kapping-convexo', name: 'Kapping convexo', price: 20, pricePerNail: 2 },
-  { id: 'tecnica-hibrida-acrilico', name: 'Técnica híbrida con acrílico', price: 20 },
-  { id: 'tecnica-hibrida-polygel', name: 'Técnica híbrida con Polygel o Builder Gel', price: 15 },
-  { id: 'fibra-vidrio', name: 'Fibra de vidrio', price: 15 },
+  { id: 'tecnica-hibrida-acrilico', name: 'Técnica híbrida con acrílico', price: 20, pricePerNail: 2, perNail: true },
+  { id: 'tecnica-hibrida-polygel', name: 'Técnica híbrida con Polygel o Builder Gel', price: 15, pricePerNail: 1.5, perNail: true },
+  { id: 'fibra-vidrio', name: 'Fibra de vidrio', price: 15, pricePerNail: 1.5, perNail: true },
 ]
 
 // Cambio de tamaño de uña
