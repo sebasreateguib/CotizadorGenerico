@@ -1,17 +1,41 @@
-export type UserRole = 'admin' | 'tecnico'
+/** Rol de PLATAFORMA, no un rol dentro del estudio. */
+export type UserRole = 'alumna' | 'superadmin'
 
 export interface Profile {
   id: string
+  /** NULL en el superadmin: no tiene estudio propio. */
+  tenant_id: string | null
   email: string
   full_name: string
+  avatar_url: string | null
   role: UserRole
-  commission_rate?: number
+  created_at: string
+}
+
+export type TenantStatus = 'activo' | 'suspendido'
+
+/** El "estudio" de una alumna. */
+export interface Tenant {
+  id: string
+  owner_id: string
+  slug: string
+  name: string
+  logo_url: string | null
+  phone: string | null
+  instagram: string | null
+  policies_text: string | null
+  currency: string
+  igv_rate: number
+  nail_size_free_up_to: number
+  nail_size_step_price: number
+  status: TenantStatus
   created_at: string
 }
 
 export interface Client {
   id: string
-  user_id: string
+  tenant_id: string
+  user_id: string | null
   name: string
   phone: string
   age: number | null
@@ -25,7 +49,8 @@ export interface Client {
 
 export interface Quote {
   id: string
-  user_id: string
+  tenant_id: string
+  user_id: string | null
   client_id: string | null
   client_name: string
   client_phone: string | null

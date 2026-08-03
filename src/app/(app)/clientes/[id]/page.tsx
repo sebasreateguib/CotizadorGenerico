@@ -22,18 +22,13 @@ export default async function ClienteDetallePage({
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user!.id).single()
-  const isAdmin = profile?.role === 'admin'
-
-  let historyQuery = supabase
+  // Sin filtro por usuario: RLS ya acota al tenant de la sesión.
+  const historyQuery = supabase
     .from('quotes')
     .select('id, date, system_name, subtotal, total_with_igv, status', { count: 'exact' })
     .eq('client_name', clientName)
     .order('date', { ascending: false })
     .range(from, to)
-
-  if (!isAdmin) historyQuery = historyQuery.eq('user_id', user!.id)
 
   const [{ data: quotes, count }, { data: statsRows }] = await Promise.all([
     historyQuery,

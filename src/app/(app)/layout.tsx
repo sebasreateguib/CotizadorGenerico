@@ -20,15 +20,11 @@ export default async function AppLayout({
     .eq('id', user.id)
     .single()
 
-  let quotesQuery = supabase
+  // Sin filtro por usuario: RLS ya acota todo al tenant de la sesión
+  // (y devuelve vacío para el superadmin, que no tiene estudio).
+  const { data: allQuotes } = await supabase
     .from('quotes')
     .select('subtotal, date')
-
-  if (profile?.role !== 'admin') {
-    quotesQuery = quotesQuery.eq('user_id', user.id)
-  }
-
-  const { data: allQuotes } = await quotesQuery
   
   // Calcular total del mes
   const monthStr = new Date().toISOString().slice(0, 7)

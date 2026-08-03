@@ -688,6 +688,19 @@ textarea:focus {
   border: 1px solid rgba(255, 172, 214, 0.25);
 }
 
+/* Estado de la cuenta de una alumna (panel de super admin) */
+.badge-activa {
+  background: rgba(62, 207, 142, 0.12);
+  color: var(--vk-success);
+  border: 1px solid rgba(62, 207, 142, 0.3);
+}
+
+.badge-suspendida {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--vk-error);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
 /* Barra de búsqueda con ícono */
 .search-input-wrap {
   position: relative;

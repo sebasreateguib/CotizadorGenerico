@@ -24,12 +24,17 @@ export interface QuoteItem {
 }
 
 /**
- * Extra de largo según tarifario:
- * incluido hasta N.° 3; desde N.° 4 se suman S/5 por cada nivel.
+ * Extra de largo, según la regla que definió la alumna en su estudio:
+ * incluido hasta el N.° `freeUpTo`, y desde ahí `stepPrice` por cada nivel.
+ * Con stepPrice = 0 (el default hasta que ella la configure) no cobra nada.
  */
-export function getNailSizeExtra(nailNumber: number): number {
-  if (nailNumber <= 3) return 0
-  return (nailNumber - 3) * 5
+export function getNailSizeExtra(
+  nailNumber: number,
+  freeUpTo: number,
+  stepPrice: number,
+): number {
+  if (nailNumber <= freeUpTo) return 0
+  return (nailNumber - freeUpTo) * stepPrice
 }
 
 /**
@@ -47,6 +52,9 @@ export function calculateQuote(params: {
   retoquePrice: number
   retoqueExtra: number
   nailNumber: number
+  /** Regla de extra por largo, configurada por la alumna en su estudio. */
+  nailSizeFreeUpTo: number
+  nailSizeStepPrice: number
   kappingExtra: number
   sizeChangePrice: number
   tipChangePrice: number
@@ -61,6 +69,8 @@ export function calculateQuote(params: {
     retoquePrice,
     retoqueExtra,
     nailNumber,
+    nailSizeFreeUpTo,
+    nailSizeStepPrice,
     kappingExtra,
     sizeChangePrice,
     tipChangePrice,
@@ -71,7 +81,7 @@ export function calculateQuote(params: {
     igvRate,
   } = params
 
-  const nailSizeExtra = getNailSizeExtra(nailNumber)
+  const nailSizeExtra = getNailSizeExtra(nailNumber, nailSizeFreeUpTo, nailSizeStepPrice)
 
   const subtotal =
     systemPrice +

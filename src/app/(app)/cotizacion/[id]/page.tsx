@@ -9,6 +9,15 @@ import type { Quote } from '@/lib/types'
 import Image from 'next/image'
 import { ArrowLeft, CircleCheck, FileDown, Loader2, Phone, BadgeCheck, Pencil, Trash2 } from 'lucide-react'
 
+/**
+ * Ancho con el que se captura el reporte para el PDF, en px.
+ * Es fijo a propósito: por debajo de 720px entran las media queries que
+ * apilan las tablas para pantallas chicas, y el PDF saldría con el layout
+ * de celular. Así una alumna que cotiza desde el teléfono entrega el mismo
+ * documento que una que cotiza desde la laptop.
+ */
+const EXPORT_WIDTH = 820
+
 export default function CotizacionDetalle({ params }: { params: Promise<{ id: string }> }) {
   const supabase = createClient()
   const router = useRouter()
@@ -18,7 +27,6 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -27,14 +35,6 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
       setLoading(false)
     })
   }, [id])
-
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      setIsAdmin(profile?.role === 'admin')
-    })
-  }, [])
 
   async function updateStatus(newStatus: 'borrador' | 'confirmada' | 'pagada') {
     if (!quote) return
@@ -68,19 +68,63 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
       const html2canvas = (await import('html2canvas')).default
       const { jsPDF } = await import('jspdf')
 
-      const canvas = await html2canvas(pdfRef.current, {
-        scale: 2,
+      // El PDF siempre se arma con el layout de escritorio. Si se capturara
+      // el ancho real del teléfono, las media queries apilarían las tablas y
+      // saldría un documento angosto y larguísimo.
+      const source = pdfRef.current
+      const naturalHeight = source.scrollHeight
+
+      // Safari en iPhone tumba los canvas muy grandes (~16M px). Se baja la
+      // escala lo necesario para no pasarse, en vez de fallar.
+      const MAX_CANVAS_PIXELS = 14_000_000
+      const scale = Math.max(
+        1,
+        Math.min(2, Math.sqrt(MAX_CANVAS_PIXELS / (EXPORT_WIDTH * naturalHeight))),
+      )
+
+      const canvas = await html2canvas(source, {
+        scale,
         backgroundColor: '#131318',
-        windowWidth: 800,
+        useCORS: true,
+        logging: false,
+        width: EXPORT_WIDTH,
+        windowWidth: EXPORT_WIDTH,
+        onclone: (_doc, element) => {
+          // El clon vive en un iframe de EXPORT_WIDTH, pero el elemento
+          // hereda restricciones de ancho de sus contenedores: se fuerzan acá.
+          const el = element as HTMLElement
+          el.style.width = `${EXPORT_WIDTH}px`
+          el.style.maxWidth = 'none'
+          el.style.margin = '0'
+          for (let p = el.parentElement; p; p = p.parentElement) {
+            p.style.width = `${EXPORT_WIDTH}px`
+            p.style.maxWidth = 'none'
+            p.style.padding = '0'
+            p.style.margin = '0'
+          }
+        },
       })
 
       const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF('p', 'mm', 'a4')
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const imgHeight = (canvas.height * pageWidth) / canvas.width
 
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight)
-      pdf.save(`Cotizacion_VK_${quote.client_name.replace(/\s+/g, '_')}.pdf`)
+      // Una cotización larga no entra en una hoja A4. Antes se agregaba la
+      // imagen entera en la página 1 y todo lo que sobraba se perdía; ahora
+      // se reparte en varias páginas desplazando la misma imagen hacia arriba.
+      pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, imgHeight)
+      let heightLeft = imgHeight - pageHeight
+      let offset = 0
+      while (heightLeft > 0) {
+        offset -= pageHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, offset, pageWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+
+      pdf.save(`Cotizacion_${quote.client_name.replace(/\s+/g, '_')}.pdf`)
     } catch (err) {
       console.error('Error exportando PDF', err)
       alert('Hubo un error al generar el PDF')
@@ -122,16 +166,13 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
               {deleting ? 'Eliminando...' : 'Eliminar borrador'}
             </button>
           )}
-          {quote.status === 'confirmada' && isAdmin && (
+          {/* La alumna es dueña de su estudio: confirma sus propios pagos,
+              no hay un admin por encima que se lo apruebe. */}
+          {quote.status === 'confirmada' && (
             <button className="btn-ghost" onClick={() => updateStatus('pagada')} style={{ color: 'var(--vk-success)', borderColor: 'rgba(62,207,142,0.3)' }}>
               <CircleCheck size={16} strokeWidth={1.8} />
               Marcar como pagada
             </button>
-          )}
-          {quote.status === 'confirmada' && !isAdmin && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--vk-text-subtle)', padding: '0 4px' }}>
-              Solo un Admin puede confirmar el pago
-            </span>
           )}
           <button className="btn-primary" onClick={exportPDF} disabled={exporting}>
             {exporting ? <Loader2 size={16} strokeWidth={2} style={{ animation: 'spin 0.8s linear infinite' }} /> : <FileDown size={16} strokeWidth={1.8} />}

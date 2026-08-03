@@ -16,6 +16,7 @@ import {
   FileText,
   Sparkles,
   ShieldCheck,
+  Tags,
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react'
@@ -187,7 +188,7 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false)
 
-  const isAdmin = profile?.role === 'admin'
+  const isSuperadmin = profile?.role === 'superadmin'
   const displayName = profile?.full_name || user.email?.split('@')[0] || 'Usuario'
 
   useEffect(() => {
@@ -224,23 +225,29 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
     router.push('/login')
   }
 
-  const navGroups: NavGroupData[] = [
-    {
-      heading: 'General',
-      items: [
-        { id: '/dashboard', title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { id: '/cotizacion/nueva', title: 'Nueva Cotización', href: '/cotizacion/nueva', icon: Sparkles },
-        { id: '/cotizaciones', title: 'Cotizaciones', href: '/cotizaciones', icon: FileText },
-        { id: '/clientes', title: 'Clientes', href: '/clientes', icon: Users },
-      ]
-    },
-    ...(isAdmin ? [{
-      heading: 'Admin',
-      items: [
-        { id: '/admin', title: 'Admin Vista', href: '/admin', icon: ShieldCheck },
-      ]
-    }] : [])
-  ];
+  // El superadmin no tiene estudio propio (tenant_id NULL): las pantallas de
+  // cotizar le saldrían vacías, así que solo ve el panel de alumnas.
+  const navGroups: NavGroupData[] = isSuperadmin
+    ? [{
+        heading: 'Plataforma',
+        items: [
+          { id: '/admin', title: 'Alumnas', href: '/admin', icon: ShieldCheck },
+        ]
+      }]
+    : [{
+        heading: 'General',
+        items: [
+          { id: '/dashboard', title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+          { id: '/cotizacion/nueva', title: 'Nueva Cotización', href: '/cotizacion/nueva', icon: Sparkles },
+          { id: '/cotizaciones', title: 'Cotizaciones', href: '/cotizaciones', icon: FileText },
+          { id: '/clientes', title: 'Clientes', href: '/clientes', icon: Users },
+        ]
+      }, {
+        heading: 'Mi estudio',
+        items: [
+          { id: '/precios', title: 'Mis precios', href: '/precios', icon: Tags },
+        ]
+      }];
 
   const bottomItems: NavItemData[] = [
     {
@@ -255,6 +262,7 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
   if (pathname.startsWith('/cotizacion/nueva')) activeId = '/cotizacion/nueva';
   else if (pathname.startsWith('/cotizaciones') || (pathname.startsWith('/cotizacion/') && !pathname.startsWith('/cotizacion/nueva'))) activeId = '/cotizaciones';
   else if (pathname.startsWith('/clientes')) activeId = '/clientes';
+  else if (pathname.startsWith('/precios')) activeId = '/precios';
   else if (pathname.startsWith('/admin')) activeId = '/admin';
 
   return (
@@ -268,7 +276,10 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
         >
           <Menu size={24} />
         </button>
-        <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--vk-text)' }}>VK STUDIO</span>
+        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+          <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--vk-text)' }}>VK STUDIO</span>
+          <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.3em', marginRight: '-0.3em', marginTop: '4px', color: 'var(--vk-pink-soft)' }}>STUDENTS</span>
+        </span>
         <div style={{ width: '40px' }} /> {/* Spacer */}
       </div>
 
@@ -291,15 +302,28 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: isDesktopCollapsed ? 'center' : 'space-between', padding: isDesktopCollapsed ? '0' : '0 8px', marginBottom: '24px', marginTop: '8px' }}>
           {!isDesktopCollapsed && (
-            <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+            <Link href="/dashboard" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textDecoration: 'none' }}>
               <Image
                 src="/bannerblanco3D.png"
-                alt="Vk Studio"
+                alt="Vk Studio Students"
                 width={400}
                 height={150}
                 style={{ width: '130px', height: 'auto' }}
                 priority
               />
+              <span style={{
+                fontFamily: 'var(--font-heading)',
+                fontSize: '10px', fontWeight: 600,
+                letterSpacing: '0.34em',
+                textTransform: 'uppercase',
+                color: 'var(--vk-pink-soft)',
+                // El tracking agrega un hueco al final; se compensa para que
+                // la palabra quede ópticamente centrada bajo el logo.
+                marginRight: '-0.34em',
+                marginTop: '8px',
+              }}>
+                Students
+              </span>
             </Link>
           )}
           <button
@@ -369,7 +393,7 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
                     {displayName}
                   </span>
                   <span style={{ fontSize: '11px', color: 'var(--vk-pink-soft)', fontWeight: 500, lineHeight: 1 }}>
-                    {isAdmin ? 'Admin' : 'Usuario'}
+                    {isSuperadmin ? 'Super admin' : 'Alumna'}
                   </span>
                 </div>
               )}

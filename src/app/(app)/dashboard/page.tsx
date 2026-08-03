@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatSoles } from '@/lib/data/calcular'
 import { avatarGradient } from '@/lib/avatar'
@@ -12,18 +13,16 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user!.id).single()
 
-  const isAdmin = profile?.role === 'admin'
+  // El superadmin no cotiza: su lugar es el panel de alumnas.
+  if (profile?.role === 'superadmin') {
+    redirect('/admin')
+  }
 
-  let quotesQuery = supabase
+  // Sin filtro por usuario: RLS ya acota al tenant de la sesión.
+  const { data: allQuotes } = await supabase
     .from('quotes')
     .select('*')
     .order('created_at', { ascending: false })
-
-  if (!isAdmin) {
-    quotesQuery = quotesQuery.eq('user_id', user!.id)
-  }
-
-  const { data: allQuotes } = await quotesQuery
   const quotes = allQuotes ?? []
 
   const now = new Date()

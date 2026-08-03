@@ -1,57 +1,36 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatSoles } from '@/lib/data/calcular'
-import { ShieldCheck, Users, Wallet, FileText, CircleCheck, HandCoins } from 'lucide-react'
-import AdminOverview, { type AdminQuoteRow, type TechnicianStat } from '@/components/admin/AdminOverview'
-import CommissionsByMonth, { type CommissionMonthRow } from '@/components/admin/CommissionsByMonth'
+import { ShieldCheck, Users, Wallet, FileText, UserCheck, Activity } from 'lucide-react'
+import AlumnasTable, { type AlumnaRow } from '@/components/admin/AlumnasTable'
 
 const PAGE_SIZE = 15
 
-interface TeamRow {
+interface TenantRPCRow {
   id: string
   name: string
-  email: string
-  role: 'admin' | 'tecnico'
+  slug: string
+  status: 'activo' | 'suspendido'
+  owner_name: string
+  owner_email: string
   quotes_count: number
-  total_revenue: number
-  pagadas: number
-  commission_rate: number
-  commission_total: number
-}
-
-interface CommissionMonthRPCRow {
-  technician_id: string
-  technician_name: string
-  month: string
-  quotes_count: number
-  commission_total: number
-}
-
-interface AdminQuoteRPCRow {
-  id: string
-  client_name: string
-  system_name: string | null
-  subtotal: number
-  total_with_igv: number
-  status: 'borrador' | 'confirmada' | 'pagada'
-  date: string
-  technician_id: string
-  technician_name: string
-  commission_rate: number
-  commission_amount: number
+  clients_count: number
+  total_facturado: number
+  last_quote_date: string | null
+  created_at: string
   total_count: number
 }
 
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; q?: string; status?: string; tech?: string }>
+  searchParams: Promise<{ page?: string; q?: string; status?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user!.id).single()
 
-  if (profile?.role !== 'admin') {
+  if (profile?.role !== 'superadmin') {
     redirect('/dashboard')
   }
 
@@ -60,62 +39,42 @@ export default async function AdminPage({
   const search = (sp.q ?? '').trim()
   const safeSearch = search.replace(/[%,()]/g, '')
   const status = sp.status ?? 'todas'
-  const tech = sp.tech ?? null
   const offset = (page - 1) * PAGE_SIZE
 
-  const [{ data: globalRows }, { data: teamRows }, { data: quoteRows }, { data: commissionMonthRows }] = await Promise.all([
-    supabase.rpc('admin_global_stats'),
-    supabase.rpc('admin_team_stats'),
-    supabase.rpc('admin_quotes', {
-      p_search: safeSearch, p_status: status, p_tech: tech, p_limit: PAGE_SIZE, p_offset: offset,
+  const [{ data: statsRows }, { data: tenantRows }] = await Promise.all([
+    supabase.rpc('superadmin_stats'),
+    supabase.rpc('superadmin_tenants', {
+      p_search: safeSearch, p_status: status, p_limit: PAGE_SIZE, p_offset: offset,
     }),
-    supabase.rpc('admin_commissions_by_month'),
   ])
 
-  const g = globalRows?.[0] ?? { tecnicos: 0, total_cotizaciones: 0, total_facturado: 0, pagadas: 0, total_comisiones: 0 }
+  const g = statsRows?.[0] ?? {
+    alumnas: 0, activas: 0, suspendidas: 0,
+    cotizaciones: 0, clientas: 0, facturado: 0, activas_30d: 0,
+  }
 
-  const technicianStats: TechnicianStat[] = ((teamRows ?? []) as TeamRow[]).map(t => ({
+  const rows = (tenantRows ?? []) as TenantRPCRow[]
+  const total = rows[0]?.total_count ?? 0
+  const alumnas: AlumnaRow[] = rows.map(t => ({
     id: t.id,
     name: t.name,
-    email: t.email,
-    role: t.role,
+    slug: t.slug,
+    status: t.status,
+    ownerName: t.owner_name,
+    ownerEmail: t.owner_email,
     quotesCount: t.quotes_count,
-    totalRevenue: Number(t.total_revenue) || 0,
-    pagadas: t.pagadas,
-    commissionRate: Number(t.commission_rate) || 0,
-    commissionTotal: Number(t.commission_total) || 0,
-  }))
-
-  const rows = (quoteRows ?? []) as AdminQuoteRPCRow[]
-  const total = rows[0]?.total_count ?? 0
-  const quoteList: AdminQuoteRow[] = rows.map(q => ({
-    id: q.id,
-    client_name: q.client_name,
-    system_name: q.system_name,
-    subtotal: Number(q.subtotal) || 0,
-    totalWithIgv: Number(q.total_with_igv) || 0,
-    status: q.status,
-    date: q.date,
-    technicianId: q.technician_id,
-    technicianName: q.technician_name,
-    commissionRate: Number(q.commission_rate) || 0,
-    commissionAmount: Number(q.commission_amount) || 0,
-  }))
-
-  const commissionMonthList: CommissionMonthRow[] = ((commissionMonthRows ?? []) as CommissionMonthRPCRow[]).map(r => ({
-    technicianId: r.technician_id,
-    technicianName: r.technician_name,
-    month: r.month,
-    quotesCount: r.quotes_count,
-    commissionTotal: Number(r.commission_total) || 0,
+    clientsCount: t.clients_count,
+    totalFacturado: Number(t.total_facturado) || 0,
+    lastQuoteDate: t.last_quote_date,
+    createdAt: t.created_at,
   }))
 
   const stats = [
-    { label: 'Técnicos activos', value: String(g.tecnicos), Icon: Users, accent: 'var(--vk-pink)' },
-    { label: 'Cotizaciones del equipo', value: String(g.total_cotizaciones), Icon: FileText, accent: 'var(--vk-pink-soft)' },
-    { label: 'Facturado en total', value: formatSoles(Number(g.total_facturado) || 0), Icon: Wallet, accent: 'var(--vk-warning)' },
-    { label: 'Pagadas', value: String(g.pagadas), Icon: CircleCheck, accent: 'var(--vk-success)' },
-    { label: 'Comisiones a pagar', value: formatSoles(Number(g.total_comisiones) || 0), Icon: HandCoins, accent: 'var(--vk-error)' },
+    { label: 'Alumnas registradas', value: String(g.alumnas), Icon: Users, accent: 'var(--vk-pink)' },
+    { label: 'Cuentas activas', value: String(g.activas), Icon: UserCheck, accent: 'var(--vk-success)' },
+    { label: 'Activas últimos 30 días', value: String(g.activas_30d), Icon: Activity, accent: 'var(--vk-pink-soft)' },
+    { label: 'Cotizaciones en total', value: String(g.cotizaciones), Icon: FileText, accent: 'var(--vk-warning)' },
+    { label: 'Facturado por todas', value: formatSoles(Number(g.facturado) || 0), Icon: Wallet, accent: 'var(--vk-text-muted)' },
   ]
 
   return (
@@ -128,7 +87,7 @@ export default async function AdminPage({
             textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: '10px',
           }}>
             <ShieldCheck size={14} strokeWidth={2} />
-            Vista de administrador
+            Vista de super admin
           </p>
           <h1 style={{
             fontFamily: 'var(--font-heading)',
@@ -138,10 +97,11 @@ export default async function AdminPage({
             lineHeight: 1.1,
             marginBottom: '6px',
           }}>
-            Todo el equipo
+            Alumnas
           </h1>
-          <p style={{ color: 'var(--vk-text-muted)', fontSize: '14px' }}>
-            Cotizaciones de todas las cuentas de técnicos, en un solo lugar.
+          <p style={{ color: 'var(--vk-text-muted)', fontSize: '14px', maxWidth: '560px' }}>
+            Cada alumna tiene su propio cotizador, con sus precios y sus clientas.
+            Acá ves cuánta actividad tiene cada una — el detalle de sus cotizaciones es privado.
           </p>
         </div>
       </div>
@@ -164,17 +124,13 @@ export default async function AdminPage({
         ))}
       </div>
 
-      <CommissionsByMonth rows={commissionMonthList} />
-
-      <AdminOverview
-        quotes={quoteList}
-        technicians={technicianStats}
+      <AlumnasTable
+        alumnas={alumnas}
         total={total}
         page={page}
         pageSize={PAGE_SIZE}
         search={search}
         status={status}
-        tech={tech}
       />
     </div>
   )

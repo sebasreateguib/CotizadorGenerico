@@ -19,17 +19,14 @@ export default async function CotizacionesPage({
   const to = from + PAGE_SIZE - 1
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user!.id).single()
-  const isAdmin = profile?.role === 'admin'
 
+  // Sin filtro por usuario: RLS ya acota al tenant de la sesión.
   let query = supabase
     .from('quotes')
     .select('id, client_name, system_name, subtotal, status, date', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to)
 
-  if (!isAdmin) query = query.eq('user_id', user!.id)
   if (safeSearch) query = query.or(`client_name.ilike.%${safeSearch}%,system_name.ilike.%${safeSearch}%`)
   if (status !== 'todas') query = query.eq('status', status)
 
