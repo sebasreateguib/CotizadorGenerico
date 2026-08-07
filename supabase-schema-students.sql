@@ -2,7 +2,8 @@
 -- VK STUDIO STUDENTS — Schema multi-tenant (Supabase)
 -- =============================================================================
 -- Correr este SQL COMPLETO en el editor SQL del proyecto Supabase NUEVO
--- (no en el de VK Studio). Es idempotente: se puede volver a correr entero.
+-- (no en el de VK Studio). Es idempotente: se puede volver a correr entero, y
+-- correrlo sobre una DB que derivó a mano la devuelve al estado de este archivo.
 --
 -- Modelo:
 --   1 alumna = 1 tenant aislado. Cada alumna carga SU PROPIO tarifario desde
@@ -16,6 +17,46 @@
 --   suspendido, así que suspender una cuenta corta el acceso a los datos
 --   a nivel de base de datos, no solo en la UI.
 -- =============================================================================
+
+
+-- =========================================
+-- 0. Limpieza de deriva (idempotente)
+-- =========================================
+-- En una base nueva esto no hace nada. Existe porque la primera DB de Students
+-- derivó de este archivo: le habían agregado a mano una tabla
+-- public.catalog_templates (un tarifario maestro global) y siembra que la
+-- copiaba al catálogo de cada alumna nueva. Eso contradice la decisión de
+-- producto —cada alumna carga su tarifario DESDE CERO— y además terminó
+-- rompiendo el alta de usuarios: al borrar la tabla, la siembra seguía
+-- referenciándola, el INSERT en auth.users se abortaba entero y el dashboard
+-- devolvía "Failed to create user" (500 en /auth/v1/admin/users).
+--
+-- Va primero para que re-correr este archivo sobre una DB derivada la deje
+-- igual a una recién creada.
+
+-- Todo trigger cuya función mencione catalog_templates es siembra: fuera.
+-- handle_new_user se excluye a propósito: no se borra, se reemplaza más abajo
+-- (sección 7) por la versión correcta, que no siembra nada.
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT n.nspname AS esquema, c.relname AS tabla, t.tgname AS disparador
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_proc p ON p.oid = t.tgfoid
+    WHERE NOT t.tgisinternal
+      AND p.prosrc ILIKE '%catalog_templates%'
+      AND p.proname <> 'handle_new_user'
+  LOOP
+    EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I.%I', r.disparador, r.esquema, r.tabla);
+    RAISE NOTICE 'Trigger de siembra eliminado: % sobre %.%', r.disparador, r.esquema, r.tabla;
+  END LOOP;
+END $$;
+
+DROP TABLE IF EXISTS public.catalog_templates;
 
 
 -- =========================================
