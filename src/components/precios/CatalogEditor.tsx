@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatSoles } from '@/lib/data/calcular'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
-import { KIND_LABELS, type CatalogEntry, type CatalogKind, type TenantCatalog } from '@/lib/data/catalogo'
+import { KIND_LABELS, type CatalogEntry, type CatalogKind, type TenantCatalog } from '@/lib/data/catalogo-shared'
 import { Plus, Trash2, Check, X, Pencil, Loader2, PackageOpen } from 'lucide-react'
 
 /** Orden en que se muestran las secciones: primero lo que hace falta para cotizar. */
