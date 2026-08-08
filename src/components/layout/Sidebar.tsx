@@ -278,7 +278,7 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
         </button>
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
           <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--vk-text)' }}>VK STUDIO</span>
-          <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.3em', marginRight: '-0.3em', marginTop: '4px', color: 'var(--vk-pink-soft)' }}>STUDENTS</span>
+          <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.3em', marginRight: '-0.3em', marginTop: '4px', color: 'var(--vk-pink-soft)' }}>ACADEMY</span>
         </span>
         <div style={{ width: '40px' }} /> {/* Spacer */}
       </div>
@@ -305,7 +305,7 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
             <Link href="/dashboard" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textDecoration: 'none' }}>
               <Image
                 src="/bannerblanco3D.png"
-                alt="Vk Studio Students"
+                alt="Vk Studio Academy"
                 width={400}
                 height={150}
                 style={{ width: '130px', height: 'auto' }}
@@ -322,7 +322,7 @@ export default function Sidebar({ user, profile, metrics }: SidebarProps) {
                 marginRight: '-0.34em',
                 marginTop: '8px',
               }}>
-                Students
+                Academy
               </span>
             </Link>
           )}

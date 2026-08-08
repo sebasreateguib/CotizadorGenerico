@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getTenant, getTenantCatalog, catalogIsEmpty } from '@/lib/data/catalogo'
+import { getTenant, getTenantCatalog } from '@/lib/data/catalogo.server'
+import { catalogIsEmpty } from '@/lib/data/catalogo'
 import QuoteForm from '@/components/cotizacion/QuoteForm'
 import { Tags, ArrowRight } from 'lucide-react'
 

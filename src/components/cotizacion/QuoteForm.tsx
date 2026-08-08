@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { CatalogEntry, TenantCatalog } from '@/lib/data/catalogo'
 import type { Tenant } from '@/lib/types'
-import { calculateQuote, formatSoles, getNailSizeExtra } from '@/lib/data/calcular'
+import { calculateQuote, formatSoles, getNailSizeExtra, priceForNails, FULL_SET_NAILS } from '@/lib/data/calcular'
 import {
   User, Layers, Ruler, Palette, Gem, ClipboardList,
   AlertTriangle, Info, Clock, Minus, Plus, ChevronLeft, ChevronRight,
@@ -55,6 +55,61 @@ export interface QuoteFormProps {
   tenant: Tenant
 }
 
+/**
+ * Selector de cuántas uñas se cobran de un sistema o retoque. Arranca en la
+ * mano completa; bajarlo cobra proporcional al precio por uña.
+ */
+function NailCountRow({
+  entry, nails, onChange, amount,
+}: {
+  entry: CatalogEntry
+  nails: number
+  onChange: (n: number) => void
+  amount: number
+}) {
+  const isFullSet = nails >= FULL_SET_NAILS
+  const perNail = entry.pricePerNail > 0 ? entry.pricePerNail : entry.price / FULL_SET_NAILS
+  const stepBtn = (disabled: boolean): React.CSSProperties => ({
+    width: '28px', height: '28px', borderRadius: '7px',
+    border: '1px solid var(--vk-border)', background: 'var(--vk-surface)',
+    color: disabled ? 'var(--vk-text-subtle)' : 'var(--vk-text)',
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.45 : 1,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  })
+
+  return (
+    <div style={{ marginTop: '8px', padding: '11px 14px', background: 'var(--vk-surface)', border: '1px solid var(--vk-border)', borderRadius: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>Uñas a cobrar</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+          <button type="button" onClick={() => onChange(nails - 1)} disabled={nails <= 1} style={stepBtn(nails <= 1)}>
+            <Minus size={13} strokeWidth={2} />
+          </button>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--vk-text)', minWidth: '22px', textAlign: 'center' }}>{nails}</span>
+          <button type="button" onClick={() => onChange(nails + 1)} disabled={isFullSet} style={stepBtn(isFullSet)}>
+            <Plus size={13} strokeWidth={2} />
+          </button>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--vk-pink-soft)', minWidth: '72px', textAlign: 'right' }}>
+            {formatSoles(amount)}
+          </span>
+        </div>
+      </div>
+      <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--vk-text-subtle)' }}>
+        {isFullSet
+          ? `Mano completa — precio del servicio${entry.duration ? ` · ${entry.duration}` : ''}`
+          : `${formatSoles(perNail)} por uña × ${nails}${entry.pricePerNail > 0 ? '' : ' (derivado del precio completo entre 10)'}`}
+      </div>
+    </div>
+  )
+}
+
+/** " (3 uñas)" cuando no es la mano completa; vacío cuando sí lo es. */
+function nailsSuffix(nails: number): string {
+  if (nails >= FULL_SET_NAILS) return ''
+  return ` (${nails} uña${nails === 1 ? '' : 's'})`
+}
+
 function daysBetween(dateStr: string): number | null {
   if (!dateStr) return null
   const last = new Date(dateStr)
@@ -102,6 +157,10 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
   // Step 2: Sistema
   const [selectedSystem, setSelectedSystem] = useState('')
   const [selectedRetoque, setSelectedRetoque] = useState('')
+  // Cuántas uñas se cobran del sistema / del retoque. 10 = mano completa, que
+  // es el caso normal; se baja cuando la clienta solo se hace algunas.
+  const [systemNails, setSystemNails] = useState(FULL_SET_NAILS)
+  const [retoqueNails, setRetoqueNails] = useState(FULL_SET_NAILS)
   const [retoqueWeeks, setRetoqueWeeks] = useState(0)
   const [nailNumber, setNailNumber] = useState(1)
   const [kappingExtra, setKappingExtra] = useState(0)
@@ -164,6 +223,9 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
 
       setSelectedSystem(catalog.sistema.find(s => s.name === data.system_name)?.id ?? '')
       setSelectedRetoque(catalog.retoque.find(r => r.name === data.retoque_name)?.id ?? '')
+      // Los borradores anteriores a "cobrar por uña" no traen la columna.
+      setSystemNails(data.system_nails ?? FULL_SET_NAILS)
+      setRetoqueNails(data.retoque_nails ?? FULL_SET_NAILS)
       const weeksIdx = catalog.retoque_semana.findIndex(w => w.price === data.retoque_weeks_extra)
       setRetoqueWeeks(weeksIdx >= 0 ? weeksIdx : 0)
       setNailNumber(data.nail_number ?? 1)
@@ -229,8 +291,8 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
   const tipChangeData = catalog.cambio_punta.find(t => t.id === tipChange)
 
   const calc = calculateQuote({
-    systemPrice: systemData?.price ?? 0,
-    retoquePrice: retoqueData?.price ?? 0,
+    systemPrice: systemData ? priceForNails(systemData, systemNails) : 0,
+    retoquePrice: retoqueData ? priceForNails(retoqueData, retoqueNails) : 0,
     retoqueExtra: catalog.retoque_semana[retoqueWeeks]?.price ?? 0,
     nailNumber,
     nailSizeFreeUpTo: tenant.nail_size_free_up_to,
@@ -250,10 +312,10 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
     const lines: { id: string; label: string; amount: number; unlockAfterStep: number }[] = []
 
     if (systemData && calc.systemPrice > 0) {
-      lines.push({ id: 'system', label: systemData.name, amount: calc.systemPrice, unlockAfterStep: 2 })
+      lines.push({ id: 'system', label: systemData.name + nailsSuffix(systemNails), amount: calc.systemPrice, unlockAfterStep: 2 })
     }
     if (retoqueData && calc.retoquePrice > 0) {
-      lines.push({ id: 'retoque', label: retoqueData.name, amount: calc.retoquePrice, unlockAfterStep: 2 })
+      lines.push({ id: 'retoque', label: retoqueData.name + nailsSuffix(retoqueNails), amount: calc.retoquePrice, unlockAfterStep: 2 })
     }
     if (calc.retoqueExtra > 0) {
       lines.push({
@@ -307,6 +369,8 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
     jewelryItems,
     retoqueWeeks,
     nailNumber,
+    systemNails,
+    retoqueNails,
   ])
 
   const filteredDesigns = catalog.diseno.filter(d => {
@@ -409,8 +473,10 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
       next_maintenance_date: nextMaintenance || null,
       system_name: systemData?.name ?? null,
       system_price: calc.systemPrice,
+      system_nails: systemData ? systemNails : FULL_SET_NAILS,
       retoque_name: retoqueData?.name ?? null,
       retoque_price: calc.retoquePrice,
+      retoque_nails: retoqueData ? retoqueNails : FULL_SET_NAILS,
       retoque_weeks_extra: calc.retoqueExtra,
       nail_number: nailNumber,
       nail_size_extra: calc.nailSizeExtra,
@@ -692,6 +758,14 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
                   </span>
                 </div>
               )}
+              {systemData && (
+                <NailCountRow
+                  entry={systemData}
+                  nails={systemNails}
+                  onChange={n => setSystemNails(Math.min(Math.max(n, 1), FULL_SET_NAILS))}
+                  amount={calc.systemPrice}
+                />
+              )}
             </div>
 
             <div>
@@ -706,6 +780,14 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
                   label: `${r.name} — ${formatSoles(r.price)}`,
                 }))}
               />
+              {retoqueData && (
+                <NailCountRow
+                  entry={retoqueData}
+                  nails={retoqueNails}
+                  onChange={n => setRetoqueNails(Math.min(Math.max(n, 1), FULL_SET_NAILS))}
+                  amount={calc.retoquePrice}
+                />
+              )}
             </div>
 
             {selectedRetoque && (
@@ -1177,16 +1259,24 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
                         {systemData.name}
                         {systemComment && <span style={{ color: 'var(--vk-text-muted)', fontSize: '12px' }}> — {systemComment}</span>}
                       </span>
-                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>—</span>
-                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(systemData.price)}</span>
+                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>{systemNails}</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>
+                        {systemNails >= FULL_SET_NAILS
+                          ? formatSoles(systemData.price)
+                          : `${formatSoles(systemData.pricePerNail > 0 ? systemData.pricePerNail : systemData.price / FULL_SET_NAILS)} / uña`}
+                      </span>
                       <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.systemPrice)}</span>
                     </div>
                   )}
                   {retoqueData && (
                     <div className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: calc.retoqueExtra > 0 ? '1px solid var(--vk-border)' : 'none', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>{retoqueData.name}</span>
-                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>—</span>
-                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>{formatSoles(retoqueData.price)}</span>
+                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>{retoqueNails}</span>
+                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>
+                        {retoqueNails >= FULL_SET_NAILS
+                          ? formatSoles(retoqueData.price)
+                          : `${formatSoles(retoqueData.pricePerNail > 0 ? retoqueData.pricePerNail : retoqueData.price / FULL_SET_NAILS)} / uña`}
+                      </span>
                       <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.retoquePrice)}</span>
                     </div>
                   )}

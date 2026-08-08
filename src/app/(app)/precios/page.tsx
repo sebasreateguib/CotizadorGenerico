@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getTenant, getTenantCatalog } from '@/lib/data/catalogo'
+import { getTenant, getTenantCatalog } from '@/lib/data/catalogo.server'
 import CatalogEditor from '@/components/precios/CatalogEditor'
 import { Tags } from 'lucide-react'
 

@@ -18,6 +18,15 @@ import { ArrowLeft, CircleCheck, FileDown, Loader2, Phone, BadgeCheck, Pencil, T
  */
 const EXPORT_WIDTH = 820
 
+/**
+ * " · 3 uñas" cuando el servicio se cobró parcial. Las cotizaciones anteriores
+ * a esta función no traen el dato, y esas se leen como mano completa.
+ */
+function nailsNote(nails: number | null | undefined): string {
+  if (nails == null || nails >= 10) return ''
+  return ` · ${nails} uña${nails === 1 ? '' : 's'}`
+}
+
 export default function CotizacionDetalle({ params }: { params: Promise<{ id: string }> }) {
   const supabase = createClient()
   const router = useRouter()
@@ -348,7 +357,9 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
                   <div className="quote-report-line">
                     <div className="quote-report-line-main">
                       <div className="quote-report-line-name">{quote.system_name}</div>
-                      <div className="quote-report-line-sub">Sistema principal</div>
+                      <div className="quote-report-line-sub">
+                        Sistema principal{nailsNote(quote.system_nails)}
+                      </div>
                     </div>
                     <div className="quote-report-line-amount">{formatSoles(quote.system_price)}</div>
                   </div>
@@ -358,7 +369,9 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
                   <div className="quote-report-line">
                     <div className="quote-report-line-main">
                       <div className="quote-report-line-name">{quote.retoque_name}</div>
-                      <div className="quote-report-line-sub">Retoque de sistema</div>
+                      <div className="quote-report-line-sub">
+                        Retoque de sistema{nailsNote(quote.retoque_nails)}
+                      </div>
                     </div>
                     <div className="quote-report-line-amount">{formatSoles(quote.retoque_price)}</div>
                   </div>

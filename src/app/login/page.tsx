@@ -68,7 +68,7 @@ export default function LoginPage() {
         <div className="banner-logo-wrapper" style={{ position: 'absolute', top: '110px', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <Image
             src="/bannercolor.png"
-            alt="Vk Studio Students"
+            alt="Vk Studio Academy"
             width={1860}
             height={414}
             style={{ width: '240px', height: 'auto' }}
@@ -83,7 +83,7 @@ export default function LoginPage() {
             marginRight: '-0.42em',
             marginTop: '15px',
           }}>
-            Students
+            Academy
           </span>
         </div>
         <div className="fade-in login-form-wrapper" style={{ width: '100%', maxWidth: '380px', position: 'relative', zIndex: 11 }}>

@@ -146,8 +146,11 @@ CREATE TABLE IF NOT EXISTS public.quotes (
   responsible TEXT,
   system_name TEXT,
   system_price DECIMAL(10,2) DEFAULT 0,
+  -- Cuántas uñas se cobraron del sistema / del retoque. 10 = mano completa.
+  system_nails INTEGER DEFAULT 10 CHECK (system_nails BETWEEN 1 AND 10),
   retoque_name TEXT,
   retoque_price DECIMAL(10,2) DEFAULT 0,
+  retoque_nails INTEGER DEFAULT 10 CHECK (retoque_nails BETWEEN 1 AND 10),
   retoque_weeks_extra DECIMAL(10,2) DEFAULT 0,
   nail_number INTEGER DEFAULT 1,
   nail_size_extra DECIMAL(10,2) DEFAULT 0,
@@ -624,6 +627,20 @@ TO authenticated;
 -- unique_tenant_slug no se expone al cliente: se usa solo desde el trigger
 -- de signup.
 REVOKE EXECUTE ON FUNCTION public.unique_tenant_slug(TEXT) FROM anon, authenticated;
+
+
+-- =========================================
+-- 12b. Migraciones sobre bases ya creadas
+-- =========================================
+-- El CREATE TABLE de arriba es IF NOT EXISTS, así que en una base que ya
+-- existe no agrega columnas nuevas. Estos ALTER son idempotentes: se pueden
+-- correr las veces que haga falta.
+
+-- Cobrar sistemas y retoques por uña (default 10 = mano completa, que es el
+-- comportamiento que tenían todas las cotizaciones anteriores).
+ALTER TABLE public.quotes
+  ADD COLUMN IF NOT EXISTS system_nails  INTEGER DEFAULT 10 CHECK (system_nails  BETWEEN 1 AND 10),
+  ADD COLUMN IF NOT EXISTS retoque_nails INTEGER DEFAULT 10 CHECK (retoque_nails BETWEEN 1 AND 10);
 
 
 -- =========================================

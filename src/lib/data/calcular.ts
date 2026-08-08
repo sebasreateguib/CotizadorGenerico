@@ -23,6 +23,27 @@ export interface QuoteItem {
   qty?: number
 }
 
+/** Una mano completa. Es el precio "de lista" de sistemas y retoques. */
+export const FULL_SET_NAILS = 10
+
+/**
+ * Cuánto se cobra de un sistema o retoque según cuántas uñas se trabajan.
+ *
+ * A 10 uñas manda el precio del servicio completo tal como lo cargó la alumna
+ * (suele traer descuento respecto de sumar uña por uña). Por debajo de 10 se
+ * cobra proporcional: su precio por uña, o el completo entre 10 si todavía no
+ * llenó ese campo — la misma regla que ya usan los adicionales.
+ */
+export function priceForNails(
+  entry: { price: number; pricePerNail: number },
+  nails: number,
+): number {
+  const clamped = Math.min(Math.max(Math.round(nails), 1), FULL_SET_NAILS)
+  if (clamped >= FULL_SET_NAILS) return entry.price
+  const perNail = entry.pricePerNail > 0 ? entry.pricePerNail : entry.price / FULL_SET_NAILS
+  return Math.round(perNail * clamped * 100) / 100
+}
+
 /**
  * Extra de largo, según la regla que definió la alumna en su estudio:
  * incluido hasta el N.° `freeUpTo`, y desde ahí `stepPrice` por cada nivel.

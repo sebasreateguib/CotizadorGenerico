@@ -56,12 +56,15 @@ export interface Quote {
   client_phone: string | null
   date: string
   responsible: string | null
-  // Sistema
+  // Sistema. system_nails = cuántas uñas se cobraron (10 = mano completa).
+  // Puede venir null en cotizaciones anteriores a "cobrar por uña".
   system_name: string | null
   system_price: number
+  system_nails: number | null
   // Retoque
   retoque_name: string | null
   retoque_price: number
+  retoque_nails: number | null
   retoque_weeks_extra: number
   // Uña actual
   nail_number: number
