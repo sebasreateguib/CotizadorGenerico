@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
-import type { Tenant } from '@/lib/types'
-
 /**
  * Secciones del cotizador. Son fijas: lo que cada alumna define es el
  * CONTENIDO de cada sección (sus servicios y sus precios), no qué secciones
  * existen. Coincide con el CHECK de "kind" en catalog_items.
+ *
+ * Sin dependencias de servidor (no importa `next/headers`) para poder
+ * usarse desde Client Components sin arrastrar código server-only al bundle.
  */
 export const CATALOG_KINDS = [
   'sistema', 'retoque', 'retoque_semana', 'adicional', 'cambio_tamanio',
@@ -106,7 +106,7 @@ export const KIND_LABELS: Record<CatalogKind, { title: string; help: string; has
   },
 }
 
-function toEntry(row: CatalogRow): CatalogEntry {
+export function toEntry(row: CatalogRow): CatalogEntry {
   return {
     id: row.id,
     name: row.name,
@@ -119,49 +119,12 @@ function toEntry(row: CatalogRow): CatalogEntry {
   }
 }
 
-function emptyCatalog(): TenantCatalog {
+export function emptyCatalog(): TenantCatalog {
   return {
     sistema: [], retoque: [], retoque_semana: [], adicional: [],
     cambio_tamanio: [], cambio_punta: [], pedreria: [], diseno: [],
     prep: [], kapping: [],
   }
-}
-
-/**
- * Catálogo de la alumna de la sesión. RLS ya lo acota a su tenant, así que
- * no hace falta filtrar por tenant_id acá.
- */
-export async function getTenantCatalog(includeInactive = false): Promise<TenantCatalog> {
-  const supabase = await createClient()
-  let query = supabase
-    .from('catalog_items')
-    .select('id, kind, name, category, price, price_per_nail, per_nail, duration, meta, sort_order, is_active')
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true })
-
-  if (!includeInactive) query = query.eq('is_active', true)
-
-  const { data } = await query
-  const catalog = emptyCatalog()
-  for (const row of (data ?? []) as CatalogRow[]) {
-    catalog[row.kind]?.push(toEntry(row))
-  }
-  return catalog
-}
-
-/** El estudio de la alumna: su marca y su configuración de cálculo. */
-export async function getTenant(): Promise<Tenant | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data } = await supabase
-    .from('tenants')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle()
-
-  return data as Tenant | null
 }
 
 /** Categorías que la alumna ya usó en una sección, para sugerirlas en la UI. */

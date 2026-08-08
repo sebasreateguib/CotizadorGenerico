@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { CatalogEntry, TenantCatalog } from '@/lib/data/catalogo'
+import type { CatalogEntry, TenantCatalog } from '@/lib/data/catalogo-shared'
 import type { Tenant } from '@/lib/types'
 import { calculateQuote, formatSoles, getNailSizeExtra, priceForNails, FULL_SET_NAILS } from '@/lib/data/calcular'
 import {
