@@ -671,11 +671,15 @@ REVOKE EXECUTE ON FUNCTION public.unique_tenant_slug(TEXT) FROM anon, authentica
 
 
 -- =========================================
--- 12b. Migraciones sobre bases ya creadas
+-- 12. Migraciones sobre bases que ya existían
 -- =========================================
--- El CREATE TABLE de arriba es IF NOT EXISTS, así que en una base que ya
--- existe no agrega columnas nuevas. Estos ALTER son idempotentes: se pueden
--- correr las veces que haga falta.
+-- Una base NUEVA no necesita nada de esta sección: las columnas ya están en
+-- los CREATE TABLE de arriba. Esto existe solo porque esos CREATE son
+-- IF NOT EXISTS, así que sobre una base ya creada no agregan columnas nuevas.
+--
+-- Al agregar una columna, va en DOS lados: en su CREATE TABLE (para las bases
+-- nuevas) y como ALTER acá (para las que ya están corriendo). Todos los ALTER
+-- son idempotentes y se pueden re-correr.
 
 -- Cobrar sistemas y retoques por uña (default 10 = mano completa, que es el
 -- comportamiento que tenían todas las cotizaciones anteriores).
@@ -685,7 +689,7 @@ ALTER TABLE public.quotes
 
 
 -- =========================================
--- 12. Promover a super admin (correr a mano, una sola vez)
+-- 13. Promover a super admin (correr a mano, una sola vez)
 -- =========================================
 -- UPDATE public.profiles SET role = 'superadmin', tenant_id = NULL
 -- WHERE email = 'admin@vkstudio.com';
