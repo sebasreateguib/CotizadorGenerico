@@ -58,6 +58,7 @@ export default function LoginPage() {
       <div className="login-right-panel" style={{
         flex: '1 1 45%',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '48px 32px',
@@ -65,7 +66,9 @@ export default function LoginPage() {
         position: 'relative',
         zIndex: 10,
       }}>
-        <div className="banner-logo-wrapper" style={{ position: 'absolute', top: '110px', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        {/* El logo va en el flujo, no absoluto: en pantallas bajas el
+            formulario centrado subía y se montaba encima de la marca. */}
+        <div className="banner-logo-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '44px', flexShrink: 0 }}>
           <Image
             src="/bannercolor.png"
             alt="Vk Studio Academy"
@@ -382,10 +385,21 @@ export default function LoginPage() {
             border-radius: 36px;
             border: 1px solid rgba(255,255,255,0.06);
             box-shadow: 0 40px 80px rgba(0,0,0,0.6);
-            margin-top: 140px;
           }
           .banner-logo-wrapper {
-            top: 60px !important;
+            margin-bottom: 32px !important;
+          }
+        }
+        /* Pantallas bajas (laptops con barra de marcadores): el bloque
+           logo + formulario ya no cabe centrado, así que se deja fluir. */
+        @media (max-height: 760px) {
+          .login-right-panel {
+            justify-content: flex-start !important;
+            padding-top: 40px !important;
+            overflow-y: auto;
+          }
+          .banner-logo-wrapper {
+            margin-bottom: 28px !important;
           }
         }
       `}</style>
