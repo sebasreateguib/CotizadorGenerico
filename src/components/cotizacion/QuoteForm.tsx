@@ -4,12 +4,12 @@ import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { CatalogEntry, TenantCatalog } from '@/lib/data/catalogo-shared'
-import type { Tenant } from '@/lib/types'
+import type { QuoteServiceItem, Tenant } from '@/lib/types'
 import { calculateQuote, formatSoles, getNailSizeExtra, priceForNails, FULL_SET_NAILS } from '@/lib/data/calcular'
 import {
   User, Layers, Ruler, Palette, Gem, ClipboardList,
   AlertTriangle, Info, Clock, Minus, Plus, ChevronLeft, ChevronRight,
-  Save, Sparkles, Loader2, Stethoscope,
+  Save, Sparkles, Loader2, Stethoscope, X,
 } from 'lucide-react'
 import {
   TIPO_UNA, ESTADO_LAMINA, TIPO_PIEL, HUMEDAD_UNA, PRODUCTO_PREVIO, ESTADO_PRODUCTO,
@@ -37,7 +37,39 @@ function adjacentStep(current: number, direction: 1 | -1): number {
   return Math.max(1, Math.min(MAX_STEP, next))
 }
 
-interface DesignItem { id: string; name: string; nails: number; unitPrice: number; comment: string }
+/**
+ * Un sistema (o un retoque) elegido para esta cotización. Se puede tener más de
+ * uno: soft gel en una mano y acrílico en la otra, por ejemplo.
+ *
+ * Copia el precio del catálogo al momento de elegirlo, en vez de guardar solo
+ * el id: así un borrador se sigue abriendo con sus montos aunque la alumna
+ * después borre ese servicio de su catálogo.
+ */
+interface ServiceItem {
+  id: string
+  name: string
+  /** Precio de la mano completa. */
+  price: number
+  pricePerNail: number
+  duration: string | null
+  nails: number
+  comment: string
+}
+
+/**
+ * Un diseño en la cotización. El mismo diseño del catálogo puede aparecer
+ * varias veces —el mismo encapsulado en rojo sobre 3 uñas y en naranja sobre
+ * 2—, así que la fila se identifica por `lineId` y no por `id`, que es el del
+ * catálogo y se repite entre líneas.
+ */
+interface DesignItem { lineId: string; id: string; name: string; nails: number; unitPrice: number; comment: string }
+
+let lineCounter = 0
+/** Id de fila, único dentro de la sesión. Nunca se guarda en la base. */
+function newLineId(): string {
+  lineCounter += 1
+  return `line-${lineCounter}`
+}
 interface JewelryItem { id: string; name: string; qty: number; unitPrice: number }
 interface AdditionalItem {
   id: string
@@ -55,6 +87,34 @@ export interface QuoteFormProps {
   tenant: Tenant
 }
 
+const inputStyle: React.CSSProperties = {
+  width: '100%', background: 'var(--vk-black)', border: '1px solid var(--vk-border)',
+  color: 'var(--vk-text)', borderRadius: '10px', padding: '11px 14px',
+  fontSize: '14px', fontFamily: 'var(--font-body)', outline: 'none',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '11px', fontWeight: 600,
+  color: 'var(--vk-text-muted)', marginBottom: '7px', textTransform: 'uppercase', letterSpacing: '0.08em',
+}
+
+const commentInputStyle: React.CSSProperties = {
+  background: 'var(--vk-black)', border: '1px solid var(--vk-border)',
+  color: 'var(--vk-text-muted)', borderRadius: '6px', padding: '5px 10px',
+  fontSize: '12px', fontFamily: 'var(--font-body)', outline: 'none', width: '100%',
+}
+
+const sectionTitleStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-heading)', fontSize: '20px', fontWeight: 700,
+  color: 'var(--vk-text)', marginBottom: '22px', letterSpacing: '-0.02em',
+}
+
+const groupHeaderStyle: React.CSSProperties = {
+  padding: '5px 16px 3px', fontSize: '10px', fontWeight: 700,
+  color: 'var(--vk-pink-soft)', textTransform: 'uppercase', letterSpacing: '0.12em',
+  background: 'rgba(243,50,131,0.05)',
+}
+
 /**
  * Selector de cuántas uñas se cobran de un sistema o retoque. Arranca en la
  * mano completa; bajarlo cobra proporcional al precio por uña.
@@ -62,7 +122,7 @@ export interface QuoteFormProps {
 function NailCountRow({
   entry, nails, onChange, amount,
 }: {
-  entry: CatalogEntry
+  entry: { price: number; pricePerNail: number; duration: string | null }
   nails: number
   onChange: (n: number) => void
   amount: number
@@ -110,6 +170,197 @@ function nailsSuffix(nails: number): string {
   return ` (${nails} uña${nails === 1 ? '' : 's'})`
 }
 
+/** Del catálogo a la cotización: entra cobrando la mano completa. */
+function toServiceItem(entry: CatalogEntry): ServiceItem {
+  return {
+    id: entry.id,
+    name: entry.name,
+    price: entry.price,
+    pricePerNail: entry.pricePerNail,
+    duration: entry.duration,
+    nails: FULL_SET_NAILS,
+    comment: '',
+  }
+}
+
+/**
+ * De la cotización guardada al formulario, al reabrir un borrador.
+ *
+ * `legacy` es el sistema/retoque único de las cotizaciones anteriores a poder
+ * cargar varios: si la lista viene vacía pero hay nombre en la columna plana,
+ * se lee de ahí. Los precios se refrescan contra el catálogo actual (es un
+ * borrador que se está reeditando); si el servicio ya no existe en el catálogo,
+ * queda el snapshot que guardó la cotización.
+ */
+function loadServiceItems(
+  stored: QuoteServiceItem[] | null | undefined,
+  legacy: { name: string | null; nails: number | null; price: number },
+  entries: CatalogEntry[],
+): ServiceItem[] {
+  const rows: QuoteServiceItem[] = stored?.length
+    ? stored
+    : legacy.name
+      ? [{
+          id: 'legacy', name: legacy.name, nails_count: legacy.nails ?? FULL_SET_NAILS,
+          unit_price: 0, full_price: legacy.price, total: legacy.price, comment: null,
+        }]
+      : []
+
+  return rows.map(row => {
+    const entry = entries.find(e => e.id === row.id) ?? entries.find(e => e.name === row.name)
+    return {
+      id: entry?.id ?? row.id,
+      name: entry?.name ?? row.name,
+      price: entry?.price ?? row.full_price ?? row.total,
+      pricePerNail: entry?.pricePerNail ?? row.unit_price ?? 0,
+      duration: entry?.duration ?? null,
+      nails: Math.min(Math.max(row.nails_count ?? FULL_SET_NAILS, 1), FULL_SET_NAILS),
+      comment: row.comment ?? '',
+    }
+  })
+}
+
+/** Al guardar: del formulario a la fila de la cotización. */
+function toStoredItem(item: ServiceItem): QuoteServiceItem {
+  return {
+    id: item.id,
+    name: item.name,
+    nails_count: item.nails,
+    unit_price: item.pricePerNail > 0 ? item.pricePerNail : item.price / FULL_SET_NAILS,
+    full_price: item.price,
+    total: serviceTotal(item),
+    comment: item.comment || null,
+  }
+}
+
+/** Lo que se cobra por un servicio según cuántas uñas lleva. */
+function serviceTotal(item: ServiceItem): number {
+  return priceForNails(item, item.nails)
+}
+
+function sumNails(items: ServiceItem[]): number {
+  return items.reduce((s, i) => s + i.nails, 0)
+}
+
+function sumTotals(items: ServiceItem[]): number {
+  return items.reduce((s, i) => s + serviceTotal(i), 0)
+}
+
+/**
+ * Lista de sistemas (o de retoques) de la cotización: un selector que agrega y
+ * una tarjeta por servicio elegido, cada una con sus uñas y su comentario.
+ *
+ * Un mismo servicio no se puede agregar dos veces —serían las mismas uñas
+ * cobradas dos veces—, así que los ya elegidos salen del selector.
+ */
+function ServiceList({
+  label, placeholder, emptyHint, entries, groupByCategory, items, onChange,
+}: {
+  label: string
+  placeholder: string
+  emptyHint: string
+  entries: CatalogEntry[]
+  groupByCategory: boolean
+  items: ServiceItem[]
+  onChange: (items: ServiceItem[]) => void
+}) {
+  const available = entries.filter(e => !items.some(i => i.id === e.id))
+  const optionFor = (e: CatalogEntry) => ({
+    value: e.id,
+    label: e.pricePerNail > 0
+      ? `${e.name} — ${formatSoles(e.price)} · ${formatSoles(e.pricePerNail)}/uña`
+      : `${e.name} — ${formatSoles(e.price)}`,
+  })
+  const categories = [...new Set(available.map(e => e.category || 'Sin categoría'))]
+
+  function add(id: string) {
+    const entry = entries.find(e => e.id === id)
+    if (!entry) return
+    onChange([...items, toServiceItem(entry)])
+  }
+
+  function patch(id: string, changes: Partial<ServiceItem>) {
+    onChange(items.map(i => i.id === id ? { ...i, ...changes } : i))
+  }
+
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {items.length > 0 && (
+        <div style={{ display: 'grid', gap: '12px', marginBottom: '12px' }}>
+          {items.map(item => (
+            <div
+              key={item.id}
+              style={{
+                padding: '13px 14px', background: 'var(--vk-pink-muted)',
+                border: '1px solid rgba(243,50,131,0.2)', borderRadius: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--vk-text)' }}>{item.name}</div>
+                  <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--vk-text-muted)' }}>
+                    <span style={{ color: 'var(--vk-pink-soft)' }}>Total: {formatSoles(item.price)}</span>
+                    {item.pricePerNail > 0 && <span>{formatSoles(item.pricePerNail)} / uña</span>}
+                    {item.duration && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} strokeWidth={2} />
+                        {item.duration}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onChange(items.filter(i => i.id !== item.id))}
+                  aria-label={`Quitar ${item.name}`}
+                  style={{
+                    flexShrink: 0, width: '28px', height: '28px', borderRadius: '7px',
+                    border: '1px solid var(--vk-border)', background: 'var(--vk-surface)',
+                    color: 'var(--vk-text-muted)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <X size={14} strokeWidth={2} />
+                </button>
+              </div>
+              <NailCountRow
+                entry={item}
+                nails={item.nails}
+                onChange={n => patch(item.id, { nails: Math.min(Math.max(n, 1), FULL_SET_NAILS) })}
+                amount={serviceTotal(item)}
+              />
+              <input
+                style={{ ...inputStyle, marginTop: '8px', fontSize: '13px' }}
+                value={item.comment}
+                onChange={e => patch(item.id, { comment: e.target.value })}
+                placeholder="Comentario (ej: tono único, solo mano derecha...)"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      {available.length > 0 ? (
+        <VkSelect
+          value=""
+          onChange={add}
+          allowEmpty
+          placeholder={items.length > 0 ? '+ Agregar otro' : placeholder}
+          options={groupByCategory ? undefined : available.map(optionFor)}
+          groups={groupByCategory
+            ? categories.map(cat => ({
+                label: cat,
+                options: available.filter(e => (e.category || 'Sin categoría') === cat).map(optionFor),
+              }))
+            : undefined}
+        />
+      ) : (
+        <div style={{ fontSize: '12px', color: 'var(--vk-text-subtle)' }}>{emptyHint}</div>
+      )}
+    </div>
+  )
+}
+
 function daysBetween(dateStr: string): number | null {
   if (!dateStr) return null
   const last = new Date(dateStr)
@@ -131,10 +382,6 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
     getNailSizeExtra(n, nailSizeFreeUpTo, nailSizeStepPrice)
 
   // Las categorías salen de lo que la alumna cargó, no de una lista fija.
-  const sistemaCategories = useMemo(
-    () => [...new Set(catalog.sistema.map(s => s.category || 'Sin categoría'))],
-    [catalog.sistema],
-  )
   const disenoCategories = useMemo(
     () => [...new Set(catalog.diseno.map(d => d.category).filter((c): c is string => !!c))],
     [catalog.diseno],
@@ -154,19 +401,16 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
   const [quoteDate, setQuoteDate] = useState(new Date().toISOString().split('T')[0])
   const [nextMaintenance, setNextMaintenance] = useState('')
 
-  // Step 2: Sistema
-  const [selectedSystem, setSelectedSystem] = useState('')
-  const [selectedRetoque, setSelectedRetoque] = useState('')
-  // Cuántas uñas se cobran del sistema / del retoque. 10 = mano completa, que
-  // es el caso normal; se baja cuando la clienta solo se hace algunas.
-  const [systemNails, setSystemNails] = useState(FULL_SET_NAILS)
-  const [retoqueNails, setRetoqueNails] = useState(FULL_SET_NAILS)
+  // Step 2: Sistema. Son listas: una cotización puede llevar varios sistemas y
+  // varios retoques. Cada uno con sus uñas (10 = mano completa, el caso normal;
+  // se baja cuando la clienta solo se hace algunas).
+  const [systemItems, setSystemItems] = useState<ServiceItem[]>([])
+  const [retoqueItems, setRetoqueItems] = useState<ServiceItem[]>([])
   const [retoqueWeeks, setRetoqueWeeks] = useState(0)
   const [nailNumber, setNailNumber] = useState(1)
   const [kappingExtra, setKappingExtra] = useState(0)
   // Arranca con el IGV que la alumna configuró en su estudio (0 por defecto).
   const [igvRate, setIgvRate] = useState(Number(tenant.igv_rate) || 0)
-  const [systemComment, setSystemComment] = useState('')
 
   // Step 3: Diagnóstico
   const [nailCurvature, setNailCurvature] = useState('')
@@ -221,11 +465,16 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
       setQuoteDate(data.date ?? new Date().toISOString().split('T')[0])
       setNextMaintenance(data.next_maintenance_date ?? '')
 
-      setSelectedSystem(catalog.sistema.find(s => s.name === data.system_name)?.id ?? '')
-      setSelectedRetoque(catalog.retoque.find(r => r.name === data.retoque_name)?.id ?? '')
-      // Los borradores anteriores a "cobrar por uña" no traen la columna.
-      setSystemNails(data.system_nails ?? FULL_SET_NAILS)
-      setRetoqueNails(data.retoque_nails ?? FULL_SET_NAILS)
+      setSystemItems(loadServiceItems(
+        data.system_items,
+        { name: data.system_name, nails: data.system_nails, price: data.system_price ?? 0 },
+        catalog.sistema,
+      ))
+      setRetoqueItems(loadServiceItems(
+        data.retoque_items,
+        { name: data.retoque_name, nails: data.retoque_nails, price: data.retoque_price ?? 0 },
+        catalog.retoque,
+      ))
       const weeksIdx = catalog.retoque_semana.findIndex(w => w.price === data.retoque_weeks_extra)
       setRetoqueWeeks(weeksIdx >= 0 ? weeksIdx : 0)
       setNailNumber(data.nail_number ?? 1)
@@ -257,7 +506,7 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
         const unitPrice = entry
           ? (entry.pricePerNail > 0 ? entry.pricePerNail : entry.price)
           : d.unit_price
-        return { id: d.id, name: d.name, nails: Math.min(d.nails_count, 10), unitPrice, comment: d.comment ?? '' }
+        return { lineId: newLineId(), id: d.id, name: d.name, nails: Math.min(d.nails_count, 10), unitPrice, comment: d.comment ?? '' }
       }))
       setAdditionalItems((data.additional_items ?? []).map((a: { id: string; name: string; quantity?: number; unit_price: number; comment?: string | null }) => {
         const entry = catalog.adicional.find(x => x.id === a.id)
@@ -285,14 +534,19 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
   }, [editId])
 
   // Computed values
-  const systemData = catalog.sistema.find(s => s.id === selectedSystem)
-  const retoqueData = catalog.retoque.find(r => r.id === selectedRetoque)
   const sizeChangeData = catalog.cambio_tamanio.find(s => s.id === sizeChange)
   const tipChangeData = catalog.cambio_punta.find(t => t.id === tipChange)
 
+  /**
+   * Uñas trabajadas entre todos los sistemas y retoques. Pasarse de 10 no está
+   * prohibido —hay servicios de manos + pies— pero casi siempre es un error de
+   * carga, así que la sección avisa sin bloquear.
+   */
+  const nailsWorked = sumNails(systemItems) + sumNails(retoqueItems)
+
   const calc = calculateQuote({
-    systemPrice: systemData ? priceForNails(systemData, systemNails) : 0,
-    retoquePrice: retoqueData ? priceForNails(retoqueData, retoqueNails) : 0,
+    systemPrice: sumTotals(systemItems),
+    retoquePrice: sumTotals(retoqueItems),
     retoqueExtra: catalog.retoque_semana[retoqueWeeks]?.price ?? 0,
     nailNumber,
     nailSizeFreeUpTo: tenant.nail_size_free_up_to,
@@ -311,12 +565,18 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
   const visibleCostLines = useMemo(() => {
     const lines: { id: string; label: string; amount: number; unlockAfterStep: number }[] = []
 
-    if (systemData && calc.systemPrice > 0) {
-      lines.push({ id: 'system', label: systemData.name + nailsSuffix(systemNails), amount: calc.systemPrice, unlockAfterStep: 2 })
-    }
-    if (retoqueData && calc.retoquePrice > 0) {
-      lines.push({ id: 'retoque', label: retoqueData.name + nailsSuffix(retoqueNails), amount: calc.retoquePrice, unlockAfterStep: 2 })
-    }
+    systemItems.forEach(s => {
+      const amount = serviceTotal(s)
+      if (amount > 0) {
+        lines.push({ id: `system-${s.id}`, label: s.name + nailsSuffix(s.nails), amount, unlockAfterStep: 2 })
+      }
+    })
+    retoqueItems.forEach(r => {
+      const amount = serviceTotal(r)
+      if (amount > 0) {
+        lines.push({ id: `retoque-${r.id}`, label: r.name + nailsSuffix(r.nails), amount, unlockAfterStep: 2 })
+      }
+    })
     if (calc.retoqueExtra > 0) {
       lines.push({
         id: 'retoque-extra',
@@ -340,7 +600,7 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
     designItems.forEach((d) => {
       const amount = d.unitPrice * d.nails
       if (amount > 0) {
-        lines.push({ id: `design-${d.id}`, label: d.name, amount, unlockAfterStep: 6 })
+        lines.push({ id: `design-${d.lineId}`, label: d.name, amount, unlockAfterStep: 6 })
       }
     })
     additionalItems.forEach((a) => {
@@ -360,8 +620,8 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
   }, [
     step,
     calc,
-    systemData,
-    retoqueData,
+    systemItems,
+    retoqueItems,
     sizeChangeData,
     tipChangeData,
     designItems,
@@ -369,8 +629,6 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
     jewelryItems,
     retoqueWeeks,
     nailNumber,
-    systemNails,
-    retoqueNails,
   ])
 
   const filteredDesigns = catalog.diseno.filter(d => {
@@ -381,29 +639,45 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
 
   const diasDesdeUltimaVisita = daysBetween(lastVisit)
 
+  /**
+   * Clic en el diseño del catálogo: suma una uña a su última línea, o la crea
+   * si todavía no está. Para el mismo diseño en otro color está "Otro color",
+   * que abre una línea aparte.
+   */
   function addDesign(design: CatalogEntry) {
     // price = set de 10 uñas; unitPrice = por uña (pricePerNail). Stickers usan price por unidad.
     const unitPrice = design.pricePerNail > 0 ? design.pricePerNail : design.price
     setDesignItems(prev => {
-      const existing = prev.find(d => d.id === design.id)
-      if (existing) {
-        if (existing.nails >= 10) return prev
-        return prev.map(d => d.id === design.id ? { ...d, nails: d.nails + 1 } : d)
+      const lastIndex = prev.reduce((found, d, i) => d.id === design.id ? i : found, -1)
+      if (lastIndex >= 0) {
+        const last = prev[lastIndex]
+        if (last.nails >= 10) return prev
+        return prev.map((d, i) => i === lastIndex ? { ...d, nails: d.nails + 1 } : d)
       }
-      return [...prev, { id: design.id, name: design.name, nails: 1, unitPrice, comment: '' }]
+      return [...prev, { lineId: newLineId(), id: design.id, name: design.name, nails: 1, unitPrice, comment: '' }]
     })
   }
 
-  function updateDesignNails(id: string, nails: number) {
+  /** Otra línea del mismo diseño, para cobrarlo en otro color sobre otras uñas. */
+  function duplicateDesign(lineId: string) {
+    setDesignItems(prev => {
+      const index = prev.findIndex(d => d.lineId === lineId)
+      if (index < 0) return prev
+      const copy = { ...prev[index], lineId: newLineId(), nails: 1, comment: '' }
+      return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)]
+    })
+  }
+
+  function updateDesignNails(lineId: string, nails: number) {
     if (nails <= 0) {
-      setDesignItems(prev => prev.filter(d => d.id !== id))
+      setDesignItems(prev => prev.filter(d => d.lineId !== lineId))
     } else {
-      setDesignItems(prev => prev.map(d => d.id === id ? { ...d, nails: Math.min(nails, 10) } : d))
+      setDesignItems(prev => prev.map(d => d.lineId === lineId ? { ...d, nails: Math.min(nails, 10) } : d))
     }
   }
 
-  function updateDesignComment(id: string, comment: string) {
-    setDesignItems(prev => prev.map(d => d.id === id ? { ...d, comment } : d))
+  function updateDesignComment(lineId: string, comment: string) {
+    setDesignItems(prev => prev.map(d => d.lineId === lineId ? { ...d, comment } : d))
   }
 
   function toggleAdditional(adicional: CatalogEntry) {
@@ -471,12 +745,17 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
       client_type: clientType,
       share_policies: sharePolicies,
       next_maintenance_date: nextMaintenance || null,
-      system_name: systemData?.name ?? null,
+      system_items: systemItems.map(toStoredItem),
+      retoque_items: retoqueItems.map(toStoredItem),
+      // Espejo plano de las dos listas de arriba. Lo consumen el buscador de
+      // cotizaciones, la columna "Sistema" de los listados y el RPC de sistema
+      // favorito de la clienta, que trabajan por columna y no por JSON.
+      system_name: systemItems.map(s => s.name).join(' + ') || null,
       system_price: calc.systemPrice,
-      system_nails: systemData ? systemNails : FULL_SET_NAILS,
-      retoque_name: retoqueData?.name ?? null,
+      system_nails: sumNails(systemItems) || FULL_SET_NAILS,
+      retoque_name: retoqueItems.map(r => r.name).join(' + ') || null,
       retoque_price: calc.retoquePrice,
-      retoque_nails: retoqueData ? retoqueNails : FULL_SET_NAILS,
+      retoque_nails: sumNails(retoqueItems) || FULL_SET_NAILS,
       retoque_weeks_extra: calc.retoqueExtra,
       nail_number: nailNumber,
       nail_size_extra: calc.nailSizeExtra,
@@ -542,34 +821,6 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
     } else {
       alert('Error al guardar: ' + error?.message)
     }
-  }
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', background: 'var(--vk-black)', border: '1px solid var(--vk-border)',
-    color: 'var(--vk-text)', borderRadius: '10px', padding: '11px 14px',
-    fontSize: '14px', fontFamily: 'var(--font-body)', outline: 'none',
-  }
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '11px', fontWeight: 600,
-    color: 'var(--vk-text-muted)', marginBottom: '7px', textTransform: 'uppercase', letterSpacing: '0.08em',
-  }
-
-  const commentInputStyle: React.CSSProperties = {
-    background: 'var(--vk-black)', border: '1px solid var(--vk-border)',
-    color: 'var(--vk-text-muted)', borderRadius: '6px', padding: '5px 10px',
-    fontSize: '12px', fontFamily: 'var(--font-body)', outline: 'none', width: '100%',
-  }
-
-  const sectionTitleStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-heading)', fontSize: '20px', fontWeight: 700,
-    color: 'var(--vk-text)', marginBottom: '22px', letterSpacing: '-0.02em',
-  }
-
-  const groupHeaderStyle: React.CSSProperties = {
-    padding: '5px 16px 3px', fontSize: '10px', fontWeight: 700,
-    color: 'var(--vk-pink-soft)', textTransform: 'uppercase', letterSpacing: '0.12em',
-    background: 'rgba(243,50,131,0.05)',
   }
 
   if (loadingEdit) {
@@ -727,70 +978,46 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
         <div className="glass-card fade-in step-card">
           <h2 style={sectionTitleStyle}>Sistema de uñas</h2>
           <div style={{ display: 'grid', gap: '18px' }}>
-            <div>
-              <label style={labelStyle}>Sistema base</label>
-              <VkSelect
-                value={selectedSystem}
-                onChange={setSelectedSystem}
-                allowEmpty
-                placeholder="— Sin sistema / Solo diseño —"
-                groups={sistemaCategories.map(cat => ({
-                  label: cat,
-                  options: catalog.sistema.filter(s => (s.category || "Sin categoría") === cat).map(s => ({
-                    value: s.id,
-                    label: `${s.name} — ${formatSoles(s.price)} · ${formatSoles(s.pricePerNail)}/uña`,
-                  })),
-                }))}
-              />
-              {systemData && (
-                <div style={{ marginTop: '8px', padding: '11px 14px', background: 'var(--vk-pink-muted)', border: '1px solid rgba(243,50,131,0.2)', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--vk-pink-soft)' }}>
-                    Total: {formatSoles(systemData.price)}
-                    {systemData.duration && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--vk-text-muted)' }}>
-                        <Clock size={13} strokeWidth={2} />
-                        {systemData.duration}
-                      </span>
-                    )}
-                  </span>
-                  <span style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>
-                    {systemData.pricePerNail > 0 && `${formatSoles(systemData.pricePerNail)} / uña`}
-                  </span>
-                </div>
-              )}
-              {systemData && (
-                <NailCountRow
-                  entry={systemData}
-                  nails={systemNails}
-                  onChange={n => setSystemNails(Math.min(Math.max(n, 1), FULL_SET_NAILS))}
-                  amount={calc.systemPrice}
-                />
-              )}
-            </div>
+            <ServiceList
+              label="Sistemas base"
+              placeholder="— Sin sistema / Solo diseño —"
+              emptyHint={catalog.sistema.length === 0
+                ? 'Todavía no cargaste sistemas en "Mis precios".'
+                : 'Ya agregaste todos los sistemas de tu catálogo.'}
+              entries={catalog.sistema}
+              groupByCategory
+              items={systemItems}
+              onChange={setSystemItems}
+            />
 
-            <div>
-              <label style={labelStyle}>Retoque (si aplica)</label>
-              <VkSelect
-                value={selectedRetoque}
-                onChange={setSelectedRetoque}
-                allowEmpty
-                placeholder="— Sin retoque —"
-                options={catalog.retoque.map(r => ({
-                  value: r.id,
-                  label: `${r.name} — ${formatSoles(r.price)}`,
-                }))}
-              />
-              {retoqueData && (
-                <NailCountRow
-                  entry={retoqueData}
-                  nails={retoqueNails}
-                  onChange={n => setRetoqueNails(Math.min(Math.max(n, 1), FULL_SET_NAILS))}
-                  amount={calc.retoquePrice}
-                />
-              )}
-            </div>
+            <ServiceList
+              label="Retoques (si aplica)"
+              placeholder="— Sin retoque —"
+              emptyHint={catalog.retoque.length === 0
+                ? 'Todavía no cargaste retoques en "Mis precios".'
+                : 'Ya agregaste todos los retoques de tu catálogo.'}
+              entries={catalog.retoque}
+              groupByCategory={false}
+              items={retoqueItems}
+              onChange={setRetoqueItems}
+            />
 
-            {selectedRetoque && (
+            {nailsWorked > FULL_SET_NAILS && (
+              <div style={{
+                padding: '12px 15px', background: 'rgba(245,169,75,0.08)',
+                border: '1px solid rgba(245,169,75,0.3)', borderRadius: '10px',
+                fontSize: '12px', color: 'var(--vk-warning)',
+                display: 'flex', gap: '9px', alignItems: 'flex-start',
+              }}>
+                <AlertTriangle size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: '1px' }} />
+                <span>
+                  Estás cobrando {nailsWorked} uñas entre sistemas y retoques, y una mano tiene {FULL_SET_NAILS}.
+                  Si el servicio incluye pies o dos manos está bien; si no, revisa las cantidades.
+                </span>
+              </div>
+            )}
+
+            {retoqueItems.length > 0 && (
               <div>
                 <label style={labelStyle}>Semanas desde último retoque</label>
                 <VkSelect
@@ -844,22 +1071,16 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
               </div>
             </div>
 
-            <div className="form-grid-2">
-              <div>
-                <label style={labelStyle}>Tasa IGV</label>
-                <VkSelect
-                  value={String(igvRate)}
-                  onChange={v => setIgvRate(Number(v))}
-                  options={[
-                    { value: '0', label: 'Sin IGV (0%)' },
-                    { value: '0.18', label: 'Con IGV (18%)' },
-                  ]}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Comentario de sistema</label>
-                <input style={inputStyle} value={systemComment} onChange={e => setSystemComment(e.target.value)} placeholder="Ej: tono único, color especial..." />
-              </div>
+            <div>
+              <label style={labelStyle}>Tasa IGV</label>
+              <VkSelect
+                value={String(igvRate)}
+                onChange={v => setIgvRate(Number(v))}
+                options={[
+                  { value: '0', label: 'Sin IGV (0%)' },
+                  { value: '0.18', label: 'Con IGV (18%)' },
+                ]}
+              />
             </div>
 
             {/* Info box */}
@@ -1020,7 +1241,12 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
             </div>
             <div className="scrollable-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
               {filteredDesigns.map(d => {
-                const inCart = designItems.find(x => x.id === d.id)
+                // Un diseño puede estar en varias líneas (mismo diseño, otro
+                // color): el contador de la tarjeta suma todas.
+                const nailsInCart = designItems
+                  .filter(x => x.id === d.id)
+                  .reduce((s, x) => s + x.nails, 0)
+                const inCart = nailsInCart > 0
                 return (
                   <button
                     key={d.id}
@@ -1037,7 +1263,7 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
                       {d.name}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--vk-text-muted)' }}>
-                      {formatSoles(d.pricePerNail > 0 ? d.pricePerNail : d.price)} / uña{inCart && <span style={{ color: 'var(--vk-pink)', fontWeight: 600 }}> × {inCart.nails}</span>}
+                      {formatSoles(d.pricePerNail > 0 ? d.pricePerNail : d.price)} / uña{inCart && <span style={{ color: 'var(--vk-pink)', fontWeight: 600 }}> × {nailsInCart}</span>}
                     </div>
                   </button>
                 )
@@ -1051,17 +1277,17 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
                 Diseños seleccionados
               </h3>
               {designItems.map(d => (
-                <div key={d.id} style={{ padding: '11px 0', borderBottom: '1px solid var(--vk-border)' }}>
+                <div key={d.lineId} style={{ padding: '11px 0', borderBottom: '1px solid var(--vk-border)' }}>
                   <div className="line-item-row" style={{ marginBottom: '7px' }}>
                     <span className="line-item-name" style={{ fontSize: '14px', color: 'var(--vk-text)' }}>{d.name}</span>
                     <span style={{ fontSize: '13px', color: 'var(--vk-text-muted)' }}>{formatSoles(d.unitPrice)} ×</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <button onClick={() => updateDesignNails(d.id, d.nails - 1)} style={{ width: '26px', height: '26px', borderRadius: '7px', border: '1px solid var(--vk-border)', background: 'var(--vk-surface)', color: 'var(--vk-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <button onClick={() => updateDesignNails(d.lineId, d.nails - 1)} style={{ width: '26px', height: '26px', borderRadius: '7px', border: '1px solid var(--vk-border)', background: 'var(--vk-surface)', color: 'var(--vk-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Minus size={13} strokeWidth={2} />
                       </button>
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--vk-text)', minWidth: '20px', textAlign: 'center' }}>{d.nails}</span>
                       <button
-                        onClick={() => updateDesignNails(d.id, d.nails + 1)}
+                        onClick={() => updateDesignNails(d.lineId, d.nails + 1)}
                         disabled={d.nails >= 10}
                         style={{
                           width: '26px', height: '26px', borderRadius: '7px',
@@ -1077,12 +1303,29 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
                     </div>
                     <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--vk-pink-soft)', minWidth: '70px', textAlign: 'right' }}>{formatSoles(d.unitPrice * d.nails)}</span>
                   </div>
-                  <input
-                    placeholder="Comentario (opcional)..."
-                    value={d.comment}
-                    onChange={e => updateDesignComment(d.id, e.target.value)}
-                    style={commentInputStyle}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      placeholder="Color o detalle (ej: rojo)..."
+                      value={d.comment}
+                      onChange={e => updateDesignComment(d.lineId, e.target.value)}
+                      style={commentInputStyle}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => duplicateDesign(d.lineId)}
+                      title={`Agregar otra línea de ${d.name}, para cobrarlo en otro color`}
+                      style={{
+                        flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '5px',
+                        padding: '5px 10px', borderRadius: '6px', cursor: 'pointer',
+                        border: '1px solid var(--vk-border)', background: 'var(--vk-surface)',
+                        color: 'var(--vk-text-muted)', fontSize: '12px', fontFamily: 'var(--font-body)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Plus size={12} strokeWidth={2} />
+                      Otro color
+                    </button>
+                  </div>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px', fontSize: '15px', fontWeight: 600, color: 'var(--vk-pink)' }}>
@@ -1250,36 +1493,27 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
               </div>
 
               {/* Sistema */}
-              {(systemData || selectedRetoque) && (
+              {(systemItems.length > 0 || retoqueItems.length > 0) && (
                 <div style={{ borderBottom: '1px solid var(--vk-border)' }}>
                   <div style={groupHeaderStyle}>Sistema</div>
-                  {systemData && (
-                    <div className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
+                  {[
+                    ...systemItems.map(item => ({ key: `sistema-${item.id}`, item })),
+                    ...retoqueItems.map(item => ({ key: `retoque-${item.id}`, item })),
+                  ].map(({ key, item }) => (
+                    <div key={key} className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>
-                        {systemData.name}
-                        {systemComment && <span style={{ color: 'var(--vk-text-muted)', fontSize: '12px' }}> — {systemComment}</span>}
+                        {item.name}
+                        {item.comment && <span style={{ color: 'var(--vk-text-muted)', fontSize: '12px' }}> — {item.comment}</span>}
                       </span>
-                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>{systemNails}</span>
+                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>{item.nails}</span>
                       <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>
-                        {systemNails >= FULL_SET_NAILS
-                          ? formatSoles(systemData.price)
-                          : `${formatSoles(systemData.pricePerNail > 0 ? systemData.pricePerNail : systemData.price / FULL_SET_NAILS)} / uña`}
+                        {item.nails >= FULL_SET_NAILS
+                          ? formatSoles(item.price)
+                          : `${formatSoles(item.pricePerNail > 0 ? item.pricePerNail : item.price / FULL_SET_NAILS)} / uña`}
                       </span>
-                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.systemPrice)}</span>
+                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(serviceTotal(item))}</span>
                     </div>
-                  )}
-                  {retoqueData && (
-                    <div className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: calc.retoqueExtra > 0 ? '1px solid var(--vk-border)' : 'none', fontSize: '13px' }}>
-                      <span style={{ color: 'var(--vk-text)' }}>{retoqueData.name}</span>
-                      <span data-label="Uñas" style={{ textAlign: 'center', color: 'var(--vk-text-muted)' }}>{retoqueNails}</span>
-                      <span data-label="Precio" style={{ textAlign: 'right', color: 'var(--vk-text-muted)' }}>
-                        {retoqueNails >= FULL_SET_NAILS
-                          ? formatSoles(retoqueData.price)
-                          : `${formatSoles(retoqueData.pricePerNail > 0 ? retoqueData.pricePerNail : retoqueData.price / FULL_SET_NAILS)} / uña`}
-                      </span>
-                      <span data-label="Total" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--vk-text)' }}>{formatSoles(calc.retoquePrice)}</span>
-                    </div>
-                  )}
+                  ))}
                   {calc.retoqueExtra > 0 && (
                     <div className="quote-summary-row" style={{ padding: '7px 16px', fontSize: '12px' }}>
                       <span style={{ color: 'var(--vk-warning)', paddingLeft: '14px' }}>Cargo semanas de retoque</span>
@@ -1370,7 +1604,7 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
                 <div>
                   <div style={groupHeaderStyle}>Diseño</div>
                   {designItems.map(d => (
-                    <div key={d.id} className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
+                    <div key={d.lineId} className="quote-summary-row" style={{ padding: '9px 16px', borderBottom: '1px solid var(--vk-border)', fontSize: '13px' }}>
                       <span style={{ color: 'var(--vk-text)' }}>
                         {d.name}
                         {d.comment && <span style={{ color: 'var(--vk-text-muted)', fontSize: '12px' }}> — {d.comment}</span>}
@@ -1421,10 +1655,10 @@ function NuevaCotizacionForm({ catalog, tenant }: QuoteFormProps) {
               <div className="service-summary-row" style={{ fontSize: '13px' }}>
                 <span style={{ color: 'var(--vk-text)', fontWeight: 500, paddingTop: '8px', borderTop: '1px solid var(--vk-border)' }}>{clientName || '—'}</span>
                 <span data-label="Diseño / Detalle" style={{ paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'center', fontSize: '12px', color: 'var(--vk-text-muted)' }}>
-                  {[systemData?.name, retoqueData?.name].filter(Boolean).join(' + ') || '—'}
+                  {[...systemItems, ...retoqueItems].map(i => i.name).join(' + ') || '—'}
                 </span>
                 <span data-label="Tiempo" style={{ color: 'var(--vk-text-muted)', paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'center' }}>
-                  {systemData?.duration ?? '—'}
+                  {systemItems.map(i => i.duration).filter(Boolean).join(' · ') || '—'}
                 </span>
                 <span data-label="Precio + IGV" style={{ color: 'var(--vk-pink-soft)', fontWeight: 700, paddingTop: '8px', borderTop: '1px solid var(--vk-border)', textAlign: 'right' }}>
                   {formatSoles(igvRate > 0 ? calc.totalWithIgv : calc.subtotal)}

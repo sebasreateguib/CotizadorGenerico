@@ -185,13 +185,21 @@ CREATE TABLE IF NOT EXISTS public.quotes (
   client_phone TEXT,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   responsible TEXT,
+  -- Una cotización puede llevar VARIOS sistemas y varios retoques (por ejemplo
+  -- soft gel en una mano y acrílico en la otra). La lista manda; las columnas
+  -- planas de al lado son su espejo —nombres unidos con " + ", suma de precios,
+  -- suma de uñas— para el buscador, los listados y cliente_detalle_stats.
+  -- [{ id, name, nails_count, unit_price, full_price, total, comment }]
+  system_items JSONB DEFAULT '[]'::jsonb,
+  retoque_items JSONB DEFAULT '[]'::jsonb,
   system_name TEXT,
   system_price DECIMAL(10,2) DEFAULT 0,
-  -- Cuántas uñas se cobraron del sistema / del retoque. 10 = mano completa.
-  system_nails INTEGER DEFAULT 10 CHECK (system_nails BETWEEN 1 AND 10),
+  -- Cuántas uñas se cobraron entre todos los sistemas / retoques. Puede pasar
+  -- de 10 cuando se combinan servicios (manos + pies).
+  system_nails INTEGER DEFAULT 10 CHECK (system_nails BETWEEN 1 AND 100),
   retoque_name TEXT,
   retoque_price DECIMAL(10,2) DEFAULT 0,
-  retoque_nails INTEGER DEFAULT 10 CHECK (retoque_nails BETWEEN 1 AND 10),
+  retoque_nails INTEGER DEFAULT 10 CHECK (retoque_nails BETWEEN 1 AND 100),
   retoque_weeks_extra DECIMAL(10,2) DEFAULT 0,
   nail_number INTEGER DEFAULT 1,
   nail_size_extra DECIMAL(10,2) DEFAULT 0,
@@ -684,8 +692,14 @@ REVOKE EXECUTE ON FUNCTION public.unique_tenant_slug(TEXT) FROM anon, authentica
 -- Cobrar sistemas y retoques por uña (default 10 = mano completa, que es el
 -- comportamiento que tenían todas las cotizaciones anteriores).
 ALTER TABLE public.quotes
-  ADD COLUMN IF NOT EXISTS system_nails  INTEGER DEFAULT 10 CHECK (system_nails  BETWEEN 1 AND 10),
-  ADD COLUMN IF NOT EXISTS retoque_nails INTEGER DEFAULT 10 CHECK (retoque_nails BETWEEN 1 AND 10);
+  ADD COLUMN IF NOT EXISTS system_nails  INTEGER DEFAULT 10,
+  ADD COLUMN IF NOT EXISTS retoque_nails INTEGER DEFAULT 10;
+
+-- Varios sistemas y varios retoques por cotización. El detalle completo del
+-- backfill y del cambio de CHECK está en scripts/add-multiple-systems-to-quotes.sql.
+ALTER TABLE public.quotes
+  ADD COLUMN IF NOT EXISTS system_items  JSONB DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS retoque_items JSONB DEFAULT '[]'::jsonb;
 
 
 -- =========================================

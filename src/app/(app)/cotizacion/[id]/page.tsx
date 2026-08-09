@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatSoles } from '@/lib/data/calcular'
-import type { Quote } from '@/lib/types'
+import type { Quote, QuoteServiceItem } from '@/lib/types'
 import Image from 'next/image'
 import { ArrowLeft, CircleCheck, FileDown, Loader2, Phone, BadgeCheck, Pencil, Trash2 } from 'lucide-react'
 
@@ -25,6 +25,56 @@ const EXPORT_WIDTH = 820
 function nailsNote(nails: number | null | undefined): string {
   if (nails == null || nails >= 10) return ''
   return ` · ${nails} uña${nails === 1 ? '' : 's'}`
+}
+
+interface ServiceLine {
+  key: string
+  name: string
+  sub: string
+  nails: number | null
+  comment: string | null
+  total: number
+}
+
+/**
+ * Las líneas de sistemas y retoques del desglose. Una cotización puede llevar
+ * varios de cada uno.
+ *
+ * Las cotizaciones anteriores a esa función guardaban un solo sistema en
+ * columnas planas; si la lista viene vacía se arma la línea desde ahí, así el
+ * reporte y el PDF de una cotización vieja salen igual que siempre.
+ */
+function serviceLines(quote: Quote): ServiceLine[] {
+  const fromList = (
+    items: QuoteServiceItem[] | null | undefined,
+    prefix: string,
+    sub: string,
+  ): ServiceLine[] => (items ?? []).map((item, i) => ({
+    key: `${prefix}-${item.id}-${i}`,
+    name: item.name,
+    sub,
+    nails: item.nails_count,
+    comment: item.comment ?? null,
+    total: Number(item.total) || 0,
+  }))
+
+  const systems = fromList(quote.system_items, 'sistema', 'Sistema')
+  const retoques = fromList(quote.retoque_items, 'retoque', 'Retoque de sistema')
+
+  if (systems.length === 0 && quote.system_name) {
+    systems.push({
+      key: 'sistema-legacy', name: quote.system_name, sub: 'Sistema principal',
+      nails: quote.system_nails, comment: null, total: quote.system_price,
+    })
+  }
+  if (retoques.length === 0 && quote.retoque_name) {
+    retoques.push({
+      key: 'retoque-legacy', name: quote.retoque_name, sub: 'Retoque de sistema',
+      nails: quote.retoque_nails, comment: null, total: quote.retoque_price,
+    })
+  }
+
+  return [...systems, ...retoques]
 }
 
 export default function CotizacionDetalle({ params }: { params: Promise<{ id: string }> }) {
@@ -353,29 +403,18 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
               </div>
 
               <div className="quote-report-ledger">
-                {quote.system_name && (
-                  <div className="quote-report-line">
+                {serviceLines(quote).map(line => (
+                  <div key={line.key} className="quote-report-line">
                     <div className="quote-report-line-main">
-                      <div className="quote-report-line-name">{quote.system_name}</div>
+                      <div className="quote-report-line-name">{line.name}</div>
                       <div className="quote-report-line-sub">
-                        Sistema principal{nailsNote(quote.system_nails)}
+                        {line.sub}{nailsNote(line.nails)}
+                        {line.comment && ` · ${line.comment}`}
                       </div>
                     </div>
-                    <div className="quote-report-line-amount">{formatSoles(quote.system_price)}</div>
+                    <div className="quote-report-line-amount">{formatSoles(line.total)}</div>
                   </div>
-                )}
-
-                {quote.retoque_name && (
-                  <div className="quote-report-line">
-                    <div className="quote-report-line-main">
-                      <div className="quote-report-line-name">{quote.retoque_name}</div>
-                      <div className="quote-report-line-sub">
-                        Retoque de sistema{nailsNote(quote.retoque_nails)}
-                      </div>
-                    </div>
-                    <div className="quote-report-line-amount">{formatSoles(quote.retoque_price)}</div>
-                  </div>
-                )}
+                ))}
 
                 {quote.retoque_weeks_extra > 0 && (
                   <div className="quote-report-line quote-report-line--muted">
@@ -446,8 +485,10 @@ export default function CotizacionDetalle({ params }: { params: Promise<{ id: st
                   </div>
                 ))}
 
-                {quote.design_items.map(d => (
-                  <div key={d.id} className="quote-report-line">
+                {/* El mismo diseño puede repetirse en varios colores, así que
+                    el id del catálogo no alcanza como key. */}
+                {quote.design_items.map((d, i) => (
+                  <div key={`${d.id}-${i}`} className="quote-report-line">
                     <div className="quote-report-line-main">
                       <div className="quote-report-line-name">
                         {d.name} <span>(×{d.nails_count} uña/s)</span>

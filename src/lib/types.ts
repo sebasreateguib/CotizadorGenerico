@@ -56,12 +56,16 @@ export interface Quote {
   client_phone: string | null
   date: string
   responsible: string | null
-  // Sistema. system_nails = cuántas uñas se cobraron (10 = mano completa).
-  // Puede venir null en cotizaciones anteriores a "cobrar por uña".
+  // Sistemas y retoques cotizados. La lista manda: una cotización puede llevar
+  // varios (soft gel en una mano, acrílico en la otra).
+  system_items: QuoteServiceItem[]
+  retoque_items: QuoteServiceItem[]
+  // Espejo plano de las listas de arriba: nombres unidos con " + ", suma de
+  // precios y suma de uñas. Existe para el buscador y los listados, que filtran
+  // y muestran por columna. En cotizaciones viejas (y solo ahí) es el dato real.
   system_name: string | null
   system_price: number
   system_nails: number | null
-  // Retoque
   retoque_name: string | null
   retoque_price: number
   retoque_nails: number | null
@@ -116,6 +120,25 @@ export interface Quote {
   status: 'borrador' | 'confirmada' | 'pagada'
   created_at: string
   updated_at: string
+}
+
+/**
+ * Un sistema o un retoque dentro de la cotización. Los precios son snapshot:
+ * si mañana la alumna sube su tarifa, esta cotización no cambia de monto.
+ *
+ * `total` no siempre es `unit_price × nails_count`: a mano completa manda
+ * `full_price`, el precio de lista, que suele traer descuento.
+ */
+export interface QuoteServiceItem {
+  id: string
+  name: string
+  nails_count: number
+  /** Precio por uña. */
+  unit_price: number
+  /** Precio de la mano completa (10 uñas). */
+  full_price: number
+  total: number
+  comment?: string | null
 }
 
 export interface QuoteAdditional {
